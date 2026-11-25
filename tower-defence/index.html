@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1717">
+  <title>Koops Games Tower Defence 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tower-defence.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <main class="game-shell">
+    <header class="game-header">
+      <a class="brand" href="../index.html"><span class="brand-mark">K</span><span>KOOPS GAMES <small>TOWER DEFENCE 3D</small></span></a>
+      <div class="resource-bar" aria-live="polite">
+        <div class="resource health-resource"><span class="resource-icon">♥</span><span><small>CORE HEALTH</small><strong id="health-value">25 / 25</strong></span><div class="health-track"><i id="health-fill"></i></div></div>
+        <div class="resource"><span class="resource-icon cash-icon">¢</span><span><small>CASH</small><strong id="cash-value">420</strong></span></div>
+        <div class="resource wave-resource"><span class="resource-icon wave-icon">⌁</span><span><small>WAVE</small><strong id="wave-value">Ready</strong></span></div>
+      </div>
+      <div class="header-actions"><button class="theme-toggle" type="button">☼ Light mode</button><a href="../index.html" class="hub-link">← Game Hub</a></div>
+    </header>
+
+    <section class="battle-heading">
+      <div><p class="eyebrow">THE COAST NEEDS YOU</p><h1 id="map-title">Harbour Hold</h1><p id="map-subtitle">Protect the harbour road. Each enemy that gets through damages your core.</p></div>
+      <div class="battle-actions"><span id="battle-state" class="battle-state"><i></i> Build your defence</span><button id="pause-btn" class="utility-btn" type="button" disabled>Pause</button><button id="speed-btn" class="utility-btn" type="button" disabled>1× Speed</button><button id="wave-btn" class="wave-btn" type="button">Start Wave 1 <span>→</span></button></div>
+    </section>
+
+    <section class="battlefield-wrap" aria-label="Tower defence battlefield">
+      <canvas id="battlefield" aria-label="Three-dimensional tower defence battlefield. Select a tower, then click open ground to place it. Click a tower to upgrade it."></canvas>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <div id="wave-banner" class="wave-banner" aria-hidden="true"></div>
+      <div class="map-tag"><span class="map-dot"></span><span id="map-tag-name">HARBOUR HOLD</span></div>
+      <button id="rotate-view-btn" class="rotate-view-btn" type="button" aria-label="Rotate battlefield camera">↻ Rotate view</button>
+      <div class="canvas-hint" id="canvas-hint">Choose a tower below, then click the map to place it</div>
+    </section>
+
+    <section class="command-deck">
+      <div class="tower-store">
+        <div class="section-heading"><div><span class="eyebrow">BUILD YOUR LINE</span><h2>Defence towers</h2></div><span id="build-hint" class="build-hint">Select a tower to place</span></div>
+        <div class="tower-options">
+          <button class="tower-option" data-tower="archer" type="button"><span class="tower-glyph glyph-archer">➶</span><span class="tower-copy"><strong>Archer</strong><small>Fast · balanced</small></span><b class="tower-cost">$100</b></button>
+          <button class="tower-option" data-tower="cannon" type="button"><span class="tower-glyph glyph-cannon">✹</span><span class="tower-copy"><strong>Cannon</strong><small>Blast · splash</small></span><b class="tower-cost">$165</b></button>
+          <button class="tower-option" data-tower="frost" type="button"><span class="tower-glyph glyph-frost">❄</span><span class="tower-copy"><strong>Frost</strong><small>Slows · control</small></span><b class="tower-cost">$145</b></button>
+          <button class="tower-option" data-tower="sniper" type="button"><span class="tower-glyph glyph-sniper">⌖</span><span class="tower-copy"><strong>Sniper</strong><small>Long range · heavy</small></span><b class="tower-cost">$210</b></button>
+        </div>
+      </div>
+      <aside id="tower-inspector" class="tower-inspector">
+        <span class="inspector-icon">✦</span><div class="inspector-copy"><strong id="inspector-title">Tower details</strong><span id="inspector-description">Place a tower or select one on the field to see its stats.</span></div>
+        <div id="inspector-stats" class="inspector-stats hidden"><span>LEVEL <b id="inspector-level">1</b></span><span>DAMAGE <b id="inspector-damage">0</b></span></div>
+        <button id="upgrade-btn" class="upgrade-btn hidden" type="button">Upgrade <span id="upgrade-cost">$0</span></button>
+      </aside>
+    </section>
+    <section class="event-strip" aria-live="polite"><span class="event-led"></span><strong>FIELD REPORT</strong><span id="event-message">The road is clear. Build towers before you call the first wave.</span><span id="kill-count" class="kill-count">0 defeated</span></section>
+  </main>
+
+  <section id="setup-screen" class="overlay-screen" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+    <div class="setup-card">
+      <p class="eyebrow">KOOPS GAMES DEFENCE CORPS</p><h2 id="setup-title">Hold the line.<br><em>Protect the coast.</em></h2>
+      <p>Place towers beside the road, stop incoming enemies and earn cash for every takedown. Keep your core standing through as many waves as you can.</p>
+      <div class="map-choices" role="group" aria-label="Choose a map">
+        <button class="map-choice selected" data-map="harbour" type="button"><span class="map-preview preview-harbour"><i></i></span><strong>Harbour Hold</strong><small>Winding docks · steady flow</small></button>
+        <button class="map-choice" data-map="pinewood" type="button"><span class="map-preview preview-pinewood"><i></i></span><strong>Pinewood Pass</strong><small>Long bends · room to plan</small></button>
+        <button class="map-choice" data-map="clifftop" type="button"><span class="map-preview preview-clifftop"><i></i></span><strong>Clifftop Run</strong><small>Tight turns · quick response</small></button>
+      </div>
+      <button id="begin-btn" class="begin-btn" type="button">Deploy to Harbour Hold <span>→</span></button>
+      <a class="back-to-hub" href="../index.html">← Back to the game hub</a>
+    </div>
+  </section>
+
+  <section id="gameover-screen" class="overlay-screen hidden" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+    <div class="setup-card gameover-card"><p class="eyebrow">CORE OFFLINE</p><h2 id="gameover-title">The line has<br><em>been overrun.</em></h2><p id="gameover-copy">Your defence held for 0 waves. Regroup and try a new strategy.</p><button id="retry-btn" class="begin-btn" type="button">Try again <span>↻</span></button><a class="back-to-hub" href="../index.html">← Return to the game hub</a></div>
+  </section>
+
+  <script src="../theme.js"></script>
+  <script src="tower-defence.js"></script>
+</body>
+</html>

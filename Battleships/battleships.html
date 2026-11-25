@@ -1,0 +1,3552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Koops Games Battleships | Aegis Naval Command</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            --hud-bg: rgba(7, 17, 30, 0.78);
+            --hud-border: rgba(56, 189, 248, 0.28);
+            --accent: #38bdf8;
+            --accent-strong: #0284c7;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #040c17;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .font-display {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        #canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #underwater-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 4;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.45s ease;
+            background:
+                radial-gradient(circle at 50% 35%, rgba(34, 211, 238, 0.14) 0%, rgba(3, 34, 56, 0.28) 55%, rgba(1, 14, 26, 0.72) 100%),
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(125, 211, 252, 0.025) 0px,
+                    rgba(125, 211, 252, 0.025) 2px,
+                    transparent 2px,
+                    transparent 6px
+                );
+            box-shadow: inset 0 0 90px rgba(2, 132, 199, 0.55);
+        }
+
+        #underwater-overlay.active {
+            opacity: 1;
+        }
+
+        #depth-readout {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            z-index: 12;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        #underwater-overlay.active ~ #depth-readout {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #hud-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 12px;
+        }
+
+        .hud-interactive {
+            pointer-events: auto;
+        }
+
+        .tactical-panel {
+            background: var(--hud-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--hud-border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .btn-tactical {
+            background: rgba(14, 33, 56, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #e0f2fe;
+            transition: all 0.16s ease;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
+        .btn-tactical:hover:not(:disabled) {
+            background: rgba(2, 132, 199, 0.45);
+            border-color: #7dd3fc;
+            transform: translateY(-1px);
+            box-shadow: 0 0 14px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-tactical:disabled {
+            opacity: 0.42;
+            cursor: not-allowed;
+        }
+
+        .btn-active {
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.85), rgba(14, 165, 233, 0.65)) !important;
+            border-color: #bae6fd !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.45);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, rgba(185, 28, 28, 0.85), rgba(239, 68, 68, 0.65));
+            border-color: rgba(252, 165, 165, 0.5);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.95), rgba(248, 113, 113, 0.75));
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, rgba(4, 120, 87, 0.88), rgba(16, 185, 129, 0.7));
+            border-color: rgba(110, 231, 183, 0.55);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(5, 150, 105, 0.96), rgba(52, 211, 153, 0.8));
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.45);
+        }
+
+        #callout-banner {
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        #combat-log::-webkit-scrollbar {
+            width: 5px;
+        }
+        #combat-log::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.4);
+        }
+        #combat-log::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.35);
+            border-radius: 999px;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            background: rgba(2, 8, 18, 0.78);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.35); }
+            50% { box-shadow: 0 0 22px 4px rgba(56, 189, 248, 0.2); }
+        }
+
+        .pulse-glow {
+            animation: pulseGlow 2.4s infinite;
+        }
+
+        .hub-exit { text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+        html[data-theme="light"] { color-scheme:light; }
+        html[data-theme="light"] .tactical-panel { --hud-bg:rgba(231,243,247,.92); --hud-border:rgba(22,105,139,.25); box-shadow:0 10px 30px rgba(21,57,76,.16),inset 0 1px rgba(255,255,255,.8); }
+        html[data-theme="light"] .text-white { color:#15364b!important; }
+        html[data-theme="light"] .text-slate-300,html[data-theme="light"] .text-slate-400,html[data-theme="light"] .text-slate-200 { color:#3c596b!important; }
+        html[data-theme="light"] .text-sky-100,html[data-theme="light"] .text-sky-200 { color:#21627a!important; }
+        html[data-theme="light"] .text-sky-300 { color:#096181!important; }
+        html[data-theme="light"] .text-cyan-200,html[data-theme="light"] .text-cyan-300 { color:#08637a!important; }
+        html[data-theme="light"] [class*="bg-slate-900"] { background-color:rgba(217,234,240,.88)!important; }
+        html[data-theme="light"] [class*="border-slate-700"] { border-color:rgba(29,86,111,.2)!important; }
+        html[data-theme="light"] .modal-backdrop { background:rgba(198,218,226,.76); }
+        html[data-theme="light"] .btn-success.text-white { color:#f3fff9!important; }
+        html[data-theme="light"] .btn-tactical:not(.btn-success):not(.btn-danger) { color:#193d53; }
+        html[data-theme="light"] .theme-toggle { color:#24495d; background:rgba(231,243,247,.88); border-color:rgba(31,97,124,.25); }
+    </style>
+</head>
+<body>
+    <!-- 3D Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- Submerged Underwater Optical Overlay -->
+    <div id="underwater-overlay"></div>
+
+    <!-- Submerged Camera Depth Readout -->
+    <div id="depth-readout" class="tactical-panel rounded-lg px-3 py-2 font-mono-tech text-xs text-cyan-200">
+        <div class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span>HYDROPHONE // SUBMERGED</span>
+        </div>
+        <div id="depth-value" class="text-sm font-bold text-cyan-300 mt-0.5">DEPTH: -0.0m</div>
+    </div>
+
+    <!-- Main HUD Overlay -->
+    <div id="hud-layer">
+        <!-- Top Bar -->
+        <div class="flex flex-wrap items-start justify-between gap-2">
+            <!-- Brand & Phase Status -->
+            <div class="tactical-panel hud-interactive rounded-xl px-4 py-2.5 flex items-center gap-3.5">
+                <div class="w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-400/40 flex items-center justify-center text-sky-300">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 3v18M3 12h18" stroke-opacity="0.45" />
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 12l6-6" stroke-width="2.2" stroke-linecap="round" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <div><div class="font-mono-tech text-[9px] font-bold tracking-[.18em] text-sky-300">KOOPS GAMES · BATTLESHIPS</div><h1 class="font-display text-sm sm:text-base font-bold tracking-wider text-white">AEGIS NAVAL COMMAND</h1></div>
+                        <span id="mode-badge" class="font-mono-tech text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/30">1P VS AI</span>
+                    </div>
+                    <div id="phase-status" class="font-mono-tech text-xs text-sky-200/85 mt-0.5">AWAITING DEPLOYMENT ORDERS</div>
+                </div>
+            </div>
+
+            <!-- Camera Presets, Weather & Audio / Menu Controls -->
+            <div class="tactical-panel hud-interactive rounded-lg p-1.5 flex flex-wrap items-center gap-1.5">
+                <button id="cam-tactical" onclick="setCameraView('TACTICAL')" class="btn-tactical btn-active px-2.5 py-1.5 rounded text-xs" title="Overhead Tactical View">
+                    RESET VIEW
+                </button>
+                <button id="cam-cinematic" onclick="setCameraView('CINEMATIC')" class="btn-tactical px-2.5 py-1.5 rounded text-xs" title="Angled Fleet View">
+                    FLEET CAM
+                </button>
+                <button id="cam-enemy" onclick="setCameraView('ENEMY')" class="btn-tactical px-2.5 py-1.5 rounded text-xs hidden" title="Focus Enemy Waters">
+                    TARGET GRID
+                </button>
+                <button id="cam-friendly" onclick="setCameraView('FRIENDLY')" class="btn-tactical px-2.5 py-1.5 rounded text-xs hidden" title="Focus Allied Waters">
+                    ALLIED GRID
+                </button>
+                <button id="cam-submerge" onclick="toggleSubmergeCamera()" class="btn-tactical px-2.5 py-1.5 rounded text-xs text-cyan-300 border-cyan-400/50" title="Dive Below Ocean Surface">
+                    SUBMERGE CAM
+                </button>
+                <div class="h-5 w-[1px] bg-slate-700 mx-0.5"></div>
+                <button id="wx-clear" onclick="setWeatherEnvironment('CLEAR')" class="btn-tactical btn-active px-2 py-1.5 rounded text-xs" title="Clear Skies">
+                    CLEAR
+                </button>
+                <button id="wx-rain" onclick="setWeatherEnvironment('RAIN')" class="btn-tactical px-2 py-1.5 rounded text-xs" title="Rain Squall">
+                    RAIN
+                </button>
+                <button id="wx-fog" onclick="setWeatherEnvironment('FOG')" class="btn-tactical px-2 py-1.5 rounded text-xs" title="Heavy Sea Fog">
+                    FOG
+                </button>
+                <button id="wx-storm" onclick="setWeatherEnvironment('STORM')" class="btn-tactical px-2 py-1.5 rounded text-xs text-sky-300" title="Thunderstorm">
+                    STORM
+                </button>
+                <button id="show-summary-btn" onclick="reopenGameOverModal()" class="btn-tactical btn-success px-2.5 py-1.5 rounded text-xs hidden">
+                    MISSION REPORT
+                </button>
+                <div class="h-5 w-[1px] bg-slate-700 mx-0.5"></div>
+                <button id="audio-toggle" onclick="toggleMute()" class="btn-tactical px-2.5 py-1.5 rounded text-xs" title="Toggle Sound Effects">
+                    SFX: ON
+                </button>
+                <button class="theme-toggle btn-tactical px-2.5 py-1.5 rounded text-xs" type="button">☼ Light mode</button>
+                <a href="../index.html" class="hub-exit btn-tactical px-2.5 py-1.5 rounded text-xs" title="Return to Koops Games">GAME HUB</a>
+                <button onclick="openMainMenu()" class="btn-tactical px-2.5 py-1.5 rounded text-xs text-amber-300 border-amber-400/40" title="Return to Command Menu">
+                    MENU
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Transient Combat Callout -->
+        <div class="flex justify-center items-center pointer-events-none">
+            <div id="callout-banner" class="opacity-0 transform -translate-y-2 tactical-panel rounded-xl px-6 py-3 text-center border-sky-400/50">
+                <div id="callout-title" class="font-display text-lg sm:text-2xl font-extrabold tracking-widest text-white">TARGET LOCKED</div>
+                <div id="callout-sub" class="font-mono-tech text-xs sm:text-sm text-sky-200 mt-0.5">COORDINATES E-5</div>
+            </div>
+        </div>
+
+        <!-- Bottom HUD: Contextual Deployment / Battle Telemetry -->
+        <div class="flex flex-col lg:flex-row items-stretch lg:items-end justify-between gap-3">
+            <!-- Setup Dock (Shown during DEPLOYMENT phase) -->
+            <div id="setup-dock" class="tactical-panel hud-interactive rounded-xl p-3.5 w-full lg:max-w-2xl hidden">
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-700/70">
+                    <div>
+                        <span id="setup-player-label" class="font-display text-xs sm:text-sm font-bold text-sky-300 tracking-wider">PLAYER 1 FLEET DEPLOYMENT</span>
+                        <p class="text-xs text-slate-300/85 mt-0.5">Click a ship below, press <span class="font-mono-tech text-sky-300">[R]</span> or Rotate to orient, then click your grid.</p>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="rotateSelectedShip()" class="btn-tactical px-3 py-1.5 rounded text-xs">
+                            ROTATE (<span id="orientation-label">H</span>)
+                        </button>
+                        <button onclick="randomizeCurrentFleet()" class="btn-tactical px-3 py-1.5 rounded text-xs text-amber-300 border-amber-400/40">
+                            AUTO-DEPLOY
+                        </button>
+                        <button onclick="clearCurrentFleet()" class="btn-tactical px-3 py-1.5 rounded text-xs text-rose-300 border-rose-400/40">
+                            CLEAR
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ship Roster Selector -->
+                <div id="ship-roster-list" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3"></div>
+
+                <div class="flex items-center justify-between gap-3">
+                    <div id="coord-readout" class="font-mono-tech text-xs text-slate-300">
+                        CURSOR: <span class="text-sky-300">--</span>
+                    </div>
+                    <button id="confirm-deployment-btn" onclick="confirmDeployment()" disabled class="btn-tactical btn-success px-4 py-2 rounded-lg text-xs sm:text-sm font-bold tracking-wider">
+                        DEPLOY FLEET
+                    </button>
+                </div>
+            </div>
+
+            <!-- Battle Fleet Status & Target Readout (Shown during BATTLE / GAMEOVER phase) -->
+            <div id="battle-dock" class="tactical-panel hud-interactive rounded-xl p-3.5 w-full lg:max-w-2xl hidden">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- Friendly Fleet -->
+                    <div class="bg-slate-900/60 border border-sky-500/20 rounded-lg p-2.5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span id="friendly-fleet-title" class="font-mono-tech text-xs font-bold text-sky-300">ALLIED TASK FORCE</span>
+                            <span id="friendly-remaining-count" class="font-mono-tech text-xs text-emerald-300">5/5 ACTIVE</span>
+                        </div>
+                        <div id="friendly-ships-status" class="space-y-1"></div>
+                    </div>
+
+                    <!-- Enemy Fleet -->
+                    <div class="bg-slate-900/60 border border-rose-500/20 rounded-lg p-2.5">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span id="enemy-fleet-title" class="font-mono-tech text-xs font-bold text-rose-300">HOSTILE CONTACT</span>
+                            <span id="enemy-remaining-count" class="font-mono-tech text-xs text-rose-300">5/5 REMAINING</span>
+                        </div>
+                        <div id="enemy-ships-status" class="space-y-1"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-700/60 font-mono-tech text-xs">
+                    <div id="turn-indicator" class="text-sky-300 font-semibold">TURN 1 // AWAITING SALVO</div>
+                    <div id="target-cursor-readout" class="text-slate-300">AIMING RETICLE: <span class="text-amber-300">--</span></div>
+                </div>
+            </div>
+
+            <!-- Combat Telemetry Log -->
+            <div class="tactical-panel hud-interactive rounded-xl p-3 w-full lg:w-80">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="font-mono-tech text-[11px] font-bold tracking-wider text-sky-300 uppercase">Tactical Event Log</span>
+                    <span class="font-mono-tech text-[10px] text-slate-400">CLICK: FIRE / PLACE · DRAG OR ARROWS: ORBIT · RIGHT DRAG: PAN</span>
+                </div>
+                <div id="combat-log" class="h-24 overflow-y-auto space-y-1 pr-1 font-mono-tech text-[11px] leading-snug">
+                    <div class="text-slate-400">System online. Drag to orbit, scroll to zoom, dive below waves, and select mode.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Menu Modal -->
+    <div id="main-menu-modal" class="modal-backdrop">
+        <div class="tactical-panel rounded-2xl max-w-xl w-full p-6 sm:p-7 border-sky-400/40">
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <span class="font-mono-tech text-xs px-2.5 py-1 rounded bg-sky-500/15 text-sky-300 border border-sky-400/30">KOOPS GAMES · 3D MARITIME COMBAT</span>
+                <span class="font-mono-tech text-xs text-slate-400">10×10 SECTOR GRID</span>
+            </div>
+            <h2 class="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-wide">AEGIS NAVAL COMMAND</h2>
+            <p class="text-sm text-slate-300/90 mt-1.5">
+                Command a five-vessel strike group across dynamic ocean swells, concealed artillery trajectories, shifting weather, and full underwater camera exploration.
+            </p>
+
+            <!-- Mode Selection -->
+            <div class="mt-5">
+                <label class="block font-mono-tech text-xs font-semibold text-sky-300 uppercase tracking-wider mb-2">Select Engagement Mode</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button id="mode-ai-btn" onclick="selectGameMode('AI')" class="btn-tactical btn-active rounded-xl p-3.5 text-left">
+                        <div class="font-display text-sm font-bold text-white">1P VS AI COMMANDER</div>
+                        <div class="text-xs text-sky-100/80 mt-0.5">Battle autonomous naval AI across three tactical tiers.</div>
+                    </button>
+                    <button id="mode-pvp-btn" onclick="selectGameMode('PVP')" class="btn-tactical rounded-xl p-3.5 text-left">
+                        <div class="font-display text-sm font-bold text-white">2P LOCAL (PASS & PLAY)</div>
+                        <div class="text-xs text-sky-100/80 mt-0.5">Two admirals on one device with secure turn handoff.</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Difficulty Selection -->
+            <div id="ai-difficulty-section" class="mt-4">
+                <label class="block font-mono-tech text-xs font-semibold text-sky-300 uppercase tracking-wider mb-2">AI Tactical Doctrine</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button id="diff-easy" onclick="selectAIDifficulty('EASY')" class="btn-tactical rounded-lg py-2 px-2 text-xs text-center">
+                        ENSIGN<br><span class="text-[10px] text-slate-300 font-normal">Patrol Search</span>
+                    </button>
+                    <button id="diff-medium" onclick="selectAIDifficulty('MEDIUM')" class="btn-tactical btn-active rounded-lg py-2 px-2 text-xs text-center">
+                        CAPTAIN<br><span class="text-[10px] text-slate-300 font-normal">Hunt &amp; Target</span>
+                    </button>
+                    <button id="diff-hard" onclick="selectAIDifficulty('HARD')" class="btn-tactical rounded-lg py-2 px-2 text-xs text-center">
+                        ADMIRAL<br><span class="text-[10px] text-slate-300 font-normal">Probability Grid</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Weather Selection -->
+            <div class="mt-4">
+                <label class="block font-mono-tech text-xs font-semibold text-sky-300 uppercase tracking-wider mb-2">Initial Sea Weather</label>
+                <div class="grid grid-cols-4 gap-2">
+                    <button id="menu-wx-clear" onclick="selectMenuWeather('CLEAR')" class="btn-tactical btn-active rounded-lg py-2 px-2 text-xs text-center">CLEAR</button>
+                    <button id="menu-wx-rain" onclick="selectMenuWeather('RAIN')" class="btn-tactical rounded-lg py-2 px-2 text-xs text-center">RAIN</button>
+                    <button id="menu-wx-fog" onclick="selectMenuWeather('FOG')" class="btn-tactical rounded-lg py-2 px-2 text-xs text-center">FOG</button>
+                    <button id="menu-wx-storm" onclick="selectMenuWeather('STORM')" class="btn-tactical rounded-lg py-2 px-2 text-xs text-center">STORM</button>
+                </div>
+            </div>
+
+            <!-- Controls Reference -->
+            <div class="mt-4 bg-slate-900/70 border border-slate-700/70 rounded-xl p-3 text-xs text-slate-300 grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono-tech">
+                <div><span class="text-sky-300">LEFT CLICK:</span> Place / Fire</div>
+                <div><span class="text-sky-300">LEFT DRAG:</span> Orbit Camera</div>
+                <div><span class="text-sky-300">ARROW KEYS:</span> Orbit Camera</div>
+                <div><span class="text-sky-300">RIGHT DRAG:</span> Pan Camera</div>
+                <div><span class="text-sky-300">SCROLL:</span> Zoom In / Out</div>
+                <div><span class="text-sky-300">[U] / DIVE:</span> Underwater View</div>
+                <div><span class="text-sky-300">[R]:</span> Rotate Ship</div>
+                <div><span class="text-sky-300">[1-4]:</span> Camera View</div>
+                <div><span class="text-sky-300">HIT:</span> Bonus Shot</div>
+            </div>
+
+            <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <a href="../index.html" class="hub-exit btn-tactical px-4 py-2.5 rounded-xl font-mono-tech text-xs font-bold">BACK TO GAME HUB</a>
+                <button onclick="startNewMatch()" class="btn-tactical btn-success pulse-glow px-6 py-3 rounded-xl font-display text-sm font-bold tracking-wider text-white">
+                    LAUNCH MISSION
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2P Pass-and-Play Handoff Modal -->
+    <div id="handoff-modal" class="modal-backdrop hidden">
+        <div class="tactical-panel rounded-2xl max-w-md w-full p-6 text-center border-amber-400/40">
+            <div class="font-mono-tech text-xs text-amber-300 uppercase tracking-widest mb-1">CLASSIFIED COMMAND HANDOFF</div>
+            <h3 id="handoff-title" class="font-display text-2xl font-bold text-white">PASS TO PLAYER 2</h3>
+            <p id="handoff-desc" class="text-sm text-slate-300 mt-2">
+                Ensure the opposing commander is not viewing the display before revealing tactical waters.
+            </p>
+            <button onclick="completeHandoff()" class="btn-tactical btn-success mt-5 w-full py-3 rounded-xl font-display text-sm font-bold tracking-wider text-white">
+                CONFIRM IDENTITY &amp; CONTINUE
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over / Victory Modal -->
+    <div id="gameover-modal" class="modal-backdrop hidden">
+        <div class="tactical-panel rounded-2xl max-w-lg w-full p-6 text-center border-sky-400/50">
+            <div id="gameover-badge" class="inline-block font-mono-tech text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 mb-2">
+                ENGAGEMENT COMPLETE
+            </div>
+            <h2 id="gameover-title" class="font-display text-3xl font-extrabold text-white tracking-wide">VICTORY</h2>
+            <p id="gameover-subtitle" class="text-sm text-slate-300 mt-1.5">All hostile vessels have been neutralized.</p>
+
+            <div id="gameover-stats" class="grid grid-cols-3 gap-2.5 my-5 font-mono-tech">
+                <div class="bg-slate-900/75 border border-slate-700/70 rounded-xl p-3">
+                    <div class="text-[10px] text-slate-400">ACCURACY</div>
+                    <div id="stat-accuracy" class="text-lg font-bold text-sky-300 mt-0.5">0%</div>
+                </div>
+                <div class="bg-slate-900/75 border border-slate-700/70 rounded-xl p-3">
+                    <div class="text-[10px] text-slate-400">SALVOS FIRED</div>
+                    <div id="stat-shots" class="text-lg font-bold text-white mt-0.5">0</div>
+                </div>
+                <div class="bg-slate-900/75 border border-slate-700/70 rounded-xl p-3">
+                    <div class="text-[10px] text-slate-400">SHIPS REMAINING</div>
+                    <div id="stat-remaining" class="text-lg font-bold text-emerald-300 mt-0.5">0/5</div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-2.5">
+                <button onclick="inspectSunkenWrecks()" class="btn-tactical px-4 py-2.5 rounded-xl font-mono-tech text-xs font-bold text-cyan-300 border-cyan-400/50">
+                    INSPECT WRECKS
+                </button>
+                <button onclick="startNewMatch()" class="btn-tactical btn-success px-5 py-2.5 rounded-xl font-display text-xs sm:text-sm font-bold text-white">
+                    PLAY AGAIN
+                </button>
+                <button onclick="openMainMenu()" class="btn-tactical px-5 py-2.5 rounded-xl font-display text-xs sm:text-sm font-bold">
+                    MAIN MENU
+                </button>
+                <a href="../index.html" class="hub-exit btn-tactical px-5 py-2.5 rounded-xl font-display text-xs sm:text-sm font-bold">GAME HUB</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="../theme.js"></script>
+    <script>
+        // =========================================================================
+        // CONFIGURATION & CONSTANTS
+        // =========================================================================
+        const GRID_SIZE = 10;
+        const CELL_SIZE = 2.15;
+        const GRID_SPAN = GRID_SIZE * CELL_SIZE; // 21.5
+        const BOARD_GAP = 7.5;
+        const SEABED_BASE_Y = -18.0;
+        const MAX_OCEAN_IMPACTS = 8;
+
+        const BOARD_CENTERS = {
+            1: new THREE.Vector3(-(GRID_SPAN * 0.5 + BOARD_GAP * 0.5), 0, 0),
+            2: new THREE.Vector3((GRID_SPAN * 0.5 + BOARD_GAP * 0.5), 0, 0)
+        };
+
+        const SHIP_SPECS = [
+            { id: 'carrier',    name: 'CARRIER',    hullCode: 'CVN-78',  length: 5, color: 0x475569, accent: 0x38bdf8 },
+            { id: 'battleship', name: 'BATTLESHIP', hullCode: 'BB-62',   length: 4, color: 0x526071, accent: 0xf59e0b },
+            { id: 'cruiser',    name: 'CRUISER',    hullCode: 'CG-52',   length: 3, color: 0x5b6b7c, accent: 0x60a5fa },
+            { id: 'submarine',  name: 'SUBMARINE',  hullCode: 'SSN-774', length: 3, color: 0x334155, accent: 0x2dd4bf },
+            { id: 'destroyer',  name: 'DESTROYER',  hullCode: 'DDG-51',  length: 2, color: 0x64748b, accent: 0xf87171 }
+        ];
+
+        const COL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
+        const WEATHER_PRESETS = {
+            CLEAR: {
+                label: 'CLEAR',
+                skyTop: 0x061224,
+                skyHorizon: 0x1d4e78,
+                sunGlow: 0xfbbf24,
+                sunColor: 0xfff1d6,
+                sunIntensity: 1.85,
+                hemiSky: 0x8ecae6,
+                hemiGround: 0x0a192f,
+                fogColor: 0x0e223d,
+                fogDensity: 0.0068,
+                oceanDeep: 0x03192e,
+                oceanShallow: 0x0c4a6e,
+                swellScale: 1.0,
+                rainCount: 0,
+                lightningChance: 0.0
+            },
+            RAIN: {
+                label: 'SQUALL',
+                skyTop: 0x0b1622,
+                skyHorizon: 0x2c4257,
+                sunGlow: 0x64748b,
+                sunColor: 0xcbd5e1,
+                sunIntensity: 1.05,
+                hemiSky: 0x64748b,
+                hemiGround: 0x071320,
+                fogColor: 0x1a2d3f,
+                fogDensity: 0.0115,
+                oceanDeep: 0x021324,
+                oceanShallow: 0x0a354d,
+                swellScale: 1.45,
+                rainCount: 650,
+                lightningChance: 0.0
+            },
+            FOG: {
+                label: 'HEAVY FOG',
+                skyTop: 0x1e2d3b,
+                skyHorizon: 0x566b7d,
+                sunGlow: 0x94a3b8,
+                sunColor: 0xe2e8f0,
+                sunIntensity: 0.85,
+                hemiSky: 0x94a3b8,
+                hemiGround: 0x142230,
+                fogColor: 0x4b6073,
+                fogDensity: 0.021,
+                oceanDeep: 0x0a2133,
+                oceanShallow: 0x1b455c,
+                swellScale: 0.72,
+                rainCount: 0,
+                lightningChance: 0.0
+            },
+            STORM: {
+                label: 'STORM',
+                skyTop: 0x030712,
+                skyHorizon: 0x172033,
+                sunGlow: 0x38bdf8,
+                sunColor: 0x93c5fd,
+                sunIntensity: 0.72,
+                hemiSky: 0x334155,
+                hemiGround: 0x050b14,
+                fogColor: 0x0c1424,
+                fogDensity: 0.0145,
+                oceanDeep: 0x010c18,
+                oceanShallow: 0x07273b,
+                swellScale: 2.05,
+                rainCount: 1100,
+                lightningChance: 0.45
+            }
+        };
+
+        // =========================================================================
+        // GAME STATE
+        // =========================================================================
+        const gameState = {
+            mode: 'AI',          // 'AI' | 'PVP'
+            difficulty: 'MEDIUM', // 'EASY' | 'MEDIUM' | 'HARD'
+            weather: 'CLEAR',     // 'CLEAR' | 'RAIN' | 'FOG' | 'STORM'
+            phase: 'MENU',        // 'MENU' | 'SETUP' | 'HANDOFF' | 'BATTLE' | 'GAMEOVER'
+            activePlayer: 1,
+            setupPlayer: 1,
+            selectedShipIndex: 0,
+            orientation: 'H',     // 'H' | 'V'
+            hoveredCell: null,
+            cameraMode: 'TACTICAL',
+            muted: false,
+            turnCount: 1,
+            players: { 1: null, 2: null },
+            aiMemory: { hitStack: [], huntDirection: null },
+            pendingHandoffAction: null
+        };
+
+        let scene, camera, renderer, controls, raycaster, mouse;
+        let skyMat, oceanMesh, oceanUniforms, seabedMesh, seabedUniforms;
+        let sunLight, ambientLight, hemiLight, underwaterPointLight, lightningLight;
+        let rainSystem = null;
+        let lightningFlashTimer = 0;
+        let friendlyBoardGroup, enemyBoardGroup;
+        let placementPreviewGroup, markersGroup, projectilesGroup, effectsGroup, ships3DGroup, bubblesGroup;
+        let gridCellMeshes = { friendly: [], enemy: [] };
+        let hoverReticleMesh = null;
+        let pointerGesture = null;
+        const cameraOrbitKeys = new Set();
+
+        let isCameraUnderwater = false;
+        let isSinkingFinaleActive = false;
+        let sinkingFinaleTimer = 0;
+        let pendingGameOverPayload = null;
+
+        let cameraAnim = {
+            active: false,
+            targetPos: new THREE.Vector3(),
+            targetLook: new THREE.Vector3(),
+            progress: 0
+        };
+
+        const activeProjectiles = [];
+        const activeEffects = [];
+        const sinkingShips = [];
+        const damageEmitters = [];
+        const bubbleParticles = [];
+
+        let impactCursor = 0;
+        const impactTimes = new Float32Array(MAX_OCEAN_IMPACTS).fill(-100);
+        const impactStrengths = new Float32Array(MAX_OCEAN_IMPACTS).fill(0);
+
+        // =========================================================================
+        // SYNTHESIZED WEB AUDIO SOUND ENGINE
+        // =========================================================================
+        class NavalSoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.masterGain = null;
+                this.masterFilter = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                    this.masterFilter = this.ctx.createBiquadFilter();
+                    this.masterFilter.type = 'lowpass';
+                    this.masterFilter.frequency.value = 18000;
+                    this.masterFilter.Q.value = 1.2;
+
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.35;
+
+                    this.masterFilter.connect(this.masterGain);
+                    this.masterGain.connect(this.ctx.destination);
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume().catch(() => {});
+                }
+            }
+
+            setUnderwaterFilter(submerged) {
+                if (!this.ctx || !this.masterFilter || !this.masterGain) return;
+                const now = this.ctx.currentTime;
+                if (submerged) {
+                    this.masterFilter.frequency.cancelScheduledValues(now);
+                    this.masterFilter.frequency.exponentialRampToValueAtTime(420, now + 0.35);
+                    this.masterFilter.Q.linearRampToValueAtTime(4.5, now + 0.35);
+                    this.masterGain.gain.linearRampToValueAtTime(0.26, now + 0.35);
+                } else {
+                    this.masterFilter.frequency.cancelScheduledValues(now);
+                    this.masterFilter.frequency.exponentialRampToValueAtTime(18000, now + 0.35);
+                    this.masterFilter.Q.linearRampToValueAtTime(1.0, now + 0.35);
+                    this.masterGain.gain.linearRampToValueAtTime(0.35, now + 0.35);
+                }
+            }
+
+            playClick() {
+                if (gameState.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(680, now);
+                osc.frequency.exponentialRampToValueAtTime(940, now + 0.045);
+                gain.gain.setValueAtTime(0.14, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.connect(gain);
+                gain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + 0.055);
+            }
+
+            playCannonLaunch() {
+                if (gameState.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+
+                const osc = this.ctx.createOscillator();
+                const oscGain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(145, now);
+                osc.frequency.exponentialRampToValueAtTime(36, now + 0.32);
+                oscGain.gain.setValueAtTime(0.55, now);
+                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.connect(oscGain);
+                oscGain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + 0.36);
+
+                this.playFilteredNoise(0.28, 950, 0.35, 'bandpass');
+            }
+
+            playSplash() {
+                if (gameState.muted) return;
+                this.init();
+                this.playFilteredNoise(0.62, 1350, 0.38, 'bandpass');
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(185, now);
+                osc.frequency.exponentialRampToValueAtTime(52, now + 0.32);
+                gain.gain.setValueAtTime(0.24, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+                osc.connect(gain);
+                gain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+
+            playExplosion(heavy = false) {
+                if (gameState.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const dur = heavy ? 1.25 : 0.78;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(heavy ? 92 : 120, now);
+                osc.frequency.exponentialRampToValueAtTime(24, now + dur);
+                gain.gain.setValueAtTime(heavy ? 0.55 : 0.38, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+                osc.connect(gain);
+                gain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + dur + 0.02);
+
+                this.playFilteredNoise(dur * 0.9, heavy ? 520 : 820, heavy ? 0.5 : 0.35, 'lowpass');
+            }
+
+            playShipSunk() {
+                if (gameState.muted) return;
+                this.init();
+                this.playExplosion(true);
+                const now = this.ctx.currentTime;
+                const freqs = [220, 174.61];
+                freqs.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(f, now + 0.25 + idx * 0.18);
+                    osc.frequency.linearRampToValueAtTime(f * 0.92, now + 1.35);
+                    gain.gain.setValueAtTime(0.001, now);
+                    gain.gain.linearRampToValueAtTime(0.11, now + 0.35 + idx * 0.18);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
+                    osc.connect(gain);
+                    gain.connect(this.masterFilter);
+                    osc.start(now + 0.25 + idx * 0.18);
+                    osc.stop(now + 1.45);
+                });
+            }
+
+            playSinkingGroan() {
+                if (gameState.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(68, now);
+                osc.frequency.linearRampToValueAtTime(34, now + 2.4);
+                gain.gain.setValueAtTime(0.24, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+                osc.connect(gain);
+                gain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + 2.55);
+            }
+
+            playThunderClap() {
+                if (gameState.muted) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(58, now);
+                osc.frequency.exponentialRampToValueAtTime(22, now + 1.4);
+                gain.gain.setValueAtTime(0.42, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.45);
+                osc.connect(gain);
+                gain.connect(this.masterFilter);
+                osc.start(now);
+                osc.stop(now + 1.5);
+                this.playFilteredNoise(1.6, 320, 0.38, 'lowpass');
+            }
+
+            playFilteredNoise(duration, freq, volume, filterType = 'lowpass') {
+                const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.55));
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = filterType;
+                filter.frequency.value = freq;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.masterFilter);
+                noise.start();
+            }
+        }
+
+        const sfx = new NavalSoundEngine();
+
+        // =========================================================================
+        // THREE.JS INITIALIZATION & ENVIRONMENT
+        // =========================================================================
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0e223d);
+            scene.fog = new THREE.FogExp2(0x0e223d, 0.0068);
+
+            camera = new THREE.PerspectiveCamera(46, container.clientWidth / container.clientHeight, 0.25, 420);
+            camera.position.set(0, 29, 31);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.08;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.065;
+            controls.maxPolarAngle = Math.PI * 0.94;
+            controls.minPolarAngle = 0.08;
+            controls.minDistance = 4;
+            controls.maxDistance = 88;
+            controls.target.set(0, -1.5, 0);
+            controls.mouseButtons = {
+                LEFT: THREE.ROTATE,
+                MIDDLE: THREE.DOLLY,
+                RIGHT: THREE.PAN
+            };
+
+            controls.addEventListener('start', () => {
+                cameraAnim.active = false;
+            });
+
+            ambientLight = new THREE.AmbientLight(0x88b4dc, 0.55);
+            scene.add(ambientLight);
+
+            hemiLight = new THREE.HemisphereLight(0x8ecae6, 0x0a192f, 0.85);
+            scene.add(hemiLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff1d6, 1.85);
+            sunLight.position.set(35, 55, -25);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 160;
+            const d = 38;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+
+            const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.55);
+            rimLight.position.set(-30, 18, 30);
+            scene.add(rimLight);
+
+            underwaterPointLight = new THREE.PointLight(0x38bdf8, 0, 65);
+            underwaterPointLight.position.set(0, -6, 0);
+            scene.add(underwaterPointLight);
+
+            lightningLight = new THREE.DirectionalLight(0xdbeafe, 0);
+            lightningLight.position.set(-20, 65, -35);
+            scene.add(lightningLight);
+
+            buildSkyDome();
+            buildRealisticOcean();
+            buildSeabedFloor();
+            buildUnderwaterBubbles();
+            buildRainSystem();
+
+            friendlyBoardGroup = new THREE.Group();
+            enemyBoardGroup = new THREE.Group();
+            placementPreviewGroup = new THREE.Group();
+            markersGroup = new THREE.Group();
+            projectilesGroup = new THREE.Group();
+            effectsGroup = new THREE.Group();
+            ships3DGroup = new THREE.Group();
+            bubblesGroup = new THREE.Group();
+
+            scene.add(friendlyBoardGroup);
+            scene.add(enemyBoardGroup);
+            scene.add(placementPreviewGroup);
+            scene.add(markersGroup);
+            scene.add(projectilesGroup);
+            scene.add(effectsGroup);
+            scene.add(ships3DGroup);
+            scene.add(bubblesGroup);
+
+            buildTacticalGrids();
+            setWeatherEnvironment(gameState.weather, true);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2(-99, -99);
+
+            const reticleGeo = new THREE.RingGeometry(0.68, 0.96, 32);
+            reticleGeo.rotateX(-Math.PI / 2);
+            const reticleMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false
+            });
+            hoverReticleMesh = new THREE.Mesh(reticleGeo, reticleMat);
+            hoverReticleMesh.visible = false;
+            scene.add(hoverReticleMesh);
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+            window.addEventListener('blur', () => cameraOrbitKeys.clear());
+            renderer.domElement.addEventListener('pointermove', onPointerMove);
+            renderer.domElement.addEventListener('pointerdown', onPointerDown);
+            renderer.domElement.addEventListener('pointerup', onPointerUp);
+            renderer.domElement.addEventListener('pointercancel', () => { pointerGesture = null; });
+            renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        function buildSkyDome() {
+            const skyGeo = new THREE.SphereGeometry(210, 32, 20);
+            skyMat = new THREE.ShaderMaterial({
+                side: THREE.BackSide,
+                depthWrite: false,
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x061224) },
+                    horizonColor: { value: new THREE.Color(0x1d4e78) },
+                    sunGlowColor: { value: new THREE.Color(0xfbbf24) },
+                    sunDir: { value: new THREE.Vector3(35, 55, -25).normalize() }
+                },
+                vertexShader: [
+                    'varying vec3 vWorldPosition;',
+                    'void main() {',
+                    '    vec4 worldPosition = modelMatrix * vec4(position, 1.0);',
+                    '    vWorldPosition = worldPosition.xyz;',
+                    '    gl_Position = projectionMatrix * viewMatrix * worldPosition;',
+                    '}'
+                ].join('\n'),
+                fragmentShader: [
+                    'uniform vec3 topColor;',
+                    'uniform vec3 horizonColor;',
+                    'uniform vec3 sunGlowColor;',
+                    'uniform vec3 sunDir;',
+                    'varying vec3 vWorldPosition;',
+                    'void main() {',
+                    '    vec3 dir = normalize(vWorldPosition);',
+                    '    float h = clamp(dir.y, 0.0, 1.0);',
+                    '    vec3 col = mix(horizonColor, topColor, pow(h, 0.58));',
+                    '    float sunAmt = max(dot(dir, sunDir), 0.0);',
+                    '    col += sunGlowColor * pow(sunAmt, 24.0) * 0.45;',
+                    '    col += vec3(1.0, 0.96, 0.85) * smoothstep(0.9985, 0.9997, sunAmt) * 1.4;',
+                    '    if (dir.y < 0.0) {',
+                    '        col = mix(horizonColor * 0.55, vec3(0.01, 0.06, 0.12), clamp(-dir.y * 3.0, 0.0, 1.0));',
+                    '    }',
+                    '    gl_FragColor = vec4(col, 1.0);',
+                    '}'
+                ].join('\n')
+            });
+            const skyDome = new THREE.Mesh(skyGeo, skyMat);
+            scene.add(skyDome);
+        }
+
+        function buildRealisticOcean() {
+            const oceanGeo = new THREE.PlaneGeometry(340, 340, 220, 220);
+            oceanGeo.rotateX(-Math.PI / 2);
+
+            const defaultImpacts = [];
+            const defaultTimes = [];
+            const defaultStrengths = [];
+            for (let i = 0; i < MAX_OCEAN_IMPACTS; i++) {
+                defaultImpacts.push(new THREE.Vector3(0, 0, -999));
+                defaultTimes.push(-100.0);
+                defaultStrengths.push(0.0);
+            }
+
+            oceanUniforms = {
+                uTime: { value: 0 },
+                uSwellScale: { value: 1.0 },
+                uSunDir: { value: new THREE.Vector3(35, 55, -25).normalize() },
+                uDeepColor: { value: new THREE.Color(0x03192e) },
+                uShallowColor: { value: new THREE.Color(0x0c4a6e) },
+                uSkyColor: { value: new THREE.Color(0x38bdf8) },
+                uSunColor: { value: new THREE.Color(0xfff3d1) },
+                uImpactCenters: { value: defaultImpacts },
+                uImpactTimes: { value: defaultTimes },
+                uImpactStrengths: { value: defaultStrengths }
+            };
+
+            const mat = new THREE.ShaderMaterial({
+                uniforms: oceanUniforms,
+                vertexShader: [
+                    'uniform float uTime;',
+                    'uniform float uSwellScale;',
+                    'uniform vec3 uImpactCenters[' + MAX_OCEAN_IMPACTS + '];',
+                    'uniform float uImpactTimes[' + MAX_OCEAN_IMPACTS + '];',
+                    'uniform float uImpactStrengths[' + MAX_OCEAN_IMPACTS + '];',
+                    'varying vec3 vWorldPos;',
+                    'varying vec3 vNormal;',
+                    'varying float vWaveHeight;',
+                    'varying float vImpactFoam;',
+                    'void main() {',
+                    '    vec3 pos = position;',
+                    '    vec4 initialWorld = modelMatrix * vec4(pos, 1.0);',
+                    '    vec2 wp = initialWorld.xz;',
+                    '    float w1 = sin(pos.x * 0.18 + uTime * 1.35) * cos(pos.z * 0.16 + uTime * 1.1) * 0.24 * uSwellScale;',
+                    '    float w2 = sin((pos.x * 0.42 - pos.z * 0.35) + uTime * 2.1) * 0.11 * uSwellScale;',
+                    '    float w3 = cos((pos.x * 0.85 + pos.z * 0.9) - uTime * 2.8) * 0.045 * uSwellScale;',
+                    '    float h = w1 + w2 + w3;',
+                    '    float dx = (0.18 * cos(pos.x * 0.18 + uTime * 1.35) * cos(pos.z * 0.16 + uTime * 1.1) * 0.24 + 0.42 * cos((pos.x * 0.42 - pos.z * 0.35) + uTime * 2.1) * 0.11) * uSwellScale;',
+                    '    float dz = (-0.16 * sin(pos.x * 0.18 + uTime * 1.35) * sin(pos.z * 0.16 + uTime * 1.1) * 0.24 - 0.35 * cos((pos.x * 0.42 - pos.z * 0.35) + uTime * 2.1) * 0.11) * uSwellScale;',
+                    '    float impactFoamAccum = 0.0;',
+                    '    for (int i = 0; i < ' + MAX_OCEAN_IMPACTS + '; i++) {',
+                    '        float age = uTime - uImpactTimes[i];',
+                    '        float strength = uImpactStrengths[i];',
+                    '        if (age >= 0.0 && age < 4.5 && strength > 0.001) {',
+                    '            vec2 toPt = wp - uImpactCenters[i].xz;',
+                    '            float dist = length(toPt) + 0.0001;',
+                    '            vec2 dir = toPt / dist;',
+                    '            float decay = exp(-age * 0.92) * exp(-dist * 0.14) * strength;',
+                    '            float waveFront = dist - age * 8.5;',
+                    '            float ring1 = sin(waveFront * 3.1) * exp(-abs(waveFront) * 0.42) * 1.45;',
+                    '            float ring2 = cos((dist - age * 5.2) * 5.4) * exp(-abs(dist - age * 5.2) * 0.55) * 0.65;',
+                    '            float crater = -exp(-dist * dist * 0.48) * exp(-age * 2.6) * 1.55 * strength;',
+                    '            float disp = (ring1 + ring2) * decay + crater;',
+                    '            h += disp;',
+                    '            float dRing = (cos(waveFront * 3.1) * 3.1 - sin(waveFront * 3.1) * 0.42) * exp(-abs(waveFront) * 0.42) * 1.45 * decay;',
+                    '            dx += dir.x * dRing * 1.8;',
+                    '            dz += dir.y * dRing * 1.8;',
+                    '            float foamRing = exp(-pow((dist - age * 7.2) * 0.55, 2.0)) * exp(-age * 0.85) * strength;',
+                    '            float innerChurn = exp(-dist * 0.38) * exp(-age * 1.25) * strength;',
+                    '            impactFoamAccum += foamRing * 1.2 + innerChurn * 0.9;',
+                    '        }',
+                    '    }',
+                    '    pos.y += h;',
+                    '    vWaveHeight = h;',
+                    '    vImpactFoam = clamp(impactFoamAccum, 0.0, 1.5);',
+                    '    vec4 worldPosition = modelMatrix * vec4(pos, 1.0);',
+                    '    vWorldPos = worldPosition.xyz;',
+                    '    vNormal = normalize(vec3(-dx, 1.0, -dz));',
+                    '    gl_Position = projectionMatrix * viewMatrix * worldPosition;',
+                    '}'
+                ].join('\n'),
+                fragmentShader: [
+                    'uniform float uTime;',
+                    'uniform float uSwellScale;',
+                    'uniform vec3 uSunDir;',
+                    'uniform vec3 uDeepColor;',
+                    'uniform vec3 uShallowColor;',
+                    'uniform vec3 uSkyColor;',
+                    'uniform vec3 uSunColor;',
+                    'varying vec3 vWorldPos;',
+                    'varying vec3 vNormal;',
+                    'varying float vWaveHeight;',
+                    'varying float vImpactFoam;',
+                    'float hash(vec2 p) {',
+                    '    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+                    '}',
+                    'float noise(vec2 p) {',
+                    '    vec2 i = floor(p);',
+                    '    vec2 f = fract(p);',
+                    '    f = f * f * (3.0 - 2.0 * f);',
+                    '    float a = hash(i);',
+                    '    float b = hash(i + vec2(1.0, 0.0));',
+                    '    float c = hash(i + vec2(0.0, 1.0));',
+                    '    float d = hash(i + vec2(1.0, 1.0));',
+                    '    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);',
+                    '}',
+                    'void main() {',
+                    '    vec2 uv = vWorldPos.xz;',
+                    '    float n1 = noise(uv * 0.65 + vec2(uTime * 0.25, -uTime * 0.18));',
+                    '    float n2 = noise(uv * 1.75 - vec2(uTime * 0.35, uTime * 0.28));',
+                    '    vec3 rippleN = normalize(vec3((n1 - 0.5) * 0.26 + (n2 - 0.5) * 0.14, 1.0, (n2 - 0.5) * 0.26 - (n1 - 0.5) * 0.14));',
+                    '    vec3 N = normalize(vNormal * 0.82 + rippleN * 0.18);',
+                    '    vec3 V = normalize(cameraPosition - vWorldPos);',
+                    '    bool underwaterView = cameraPosition.y < vWorldPos.y;',
+                    '    if (underwaterView) {',
+                    '        N = -N;',
+                    '        float upDot = max(dot(-V, vec3(0.0, 1.0, 0.0)), 0.0);',
+                    '        float snellWindow = smoothstep(0.42, 0.88, upDot);',
+                    '        float causticA = noise(uv * 0.85 + vec2(uTime * 0.42, uTime * 0.31));',
+                    '        float causticB = noise(uv * 1.45 - vec2(uTime * 0.37, -uTime * 0.46));',
+                    '        float caustics = pow(clamp(causticA * causticB * 2.35, 0.0, 1.0), 2.2);',
+                    '        vec3 deepWater = vec3(0.008, 0.075, 0.145);',
+                    '        vec3 surfaceGlow = vec3(0.14, 0.68, 0.88);',
+                    '        vec3 col = mix(deepWater, surfaceGlow, snellWindow * 0.78);',
+                    '        col += vec3(0.32, 0.88, 1.0) * caustics * (0.35 + snellWindow * 0.65);',
+                    '        float ray = pow(max(dot(reflect(-uSunDir, N), V), 0.0), 10.0);',
+                    '        col += vec3(0.25, 0.82, 0.98) * ray * 0.45;',
+                    '        float dist = length(cameraPosition - vWorldPos);',
+                    '        float uwFog = 1.0 - exp(-pow(dist * 0.026, 2.0));',
+                    '        col = mix(col, vec3(0.012, 0.133, 0.22), clamp(uwFog, 0.0, 1.0));',
+                    '        gl_FragColor = vec4(col, 0.86);',
+                    '        return;',
+                    '    }',
+                    '    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0);',
+                    '    fresnel = clamp(0.08 + fresnel * 0.88, 0.0, 1.0);',
+                    '    float crest = smoothstep(-0.22, 0.34, vWaveHeight);',
+                    '    vec3 waterBody = mix(uDeepColor, uShallowColor, crest * 0.75 + n1 * 0.25);',
+                    '    vec3 reflDir = reflect(-V, N);',
+                    '    float skyGrad = clamp(reflDir.y * 1.6, 0.0, 1.0);',
+                    '    vec3 skyRefl = mix(uSkyColor * 0.55, uSkyColor * 1.15, skyGrad);',
+                    '    vec3 col = mix(waterBody, skyRefl, fresnel * 0.72);',
+                    '    vec3 H = normalize(uSunDir + V);',
+                    '    float specTight = pow(max(dot(N, H), 0.0), 220.0);',
+                    '    float specBroad = pow(max(dot(N, H), 0.0), 28.0);',
+                    '    col += uSunColor * specTight * 2.4 + uSunColor * specBroad * 0.22;',
+                    '    float foam = smoothstep(0.24, 0.38, vWaveHeight + (n1 * 0.12));',
+                    '    col = mix(col, vec3(0.85, 0.93, 0.98), foam * clamp(0.35 * uSwellScale, 0.2, 0.72));',
+                    '    float churnFoam = clamp(vImpactFoam * (0.65 + n2 * 0.55), 0.0, 1.0);',
+                    '    col = mix(col, vec3(0.94, 0.98, 1.0), churnFoam * 0.85);',
+                    '    float dist = length(cameraPosition - vWorldPos);',
+                    '    float fogFactor = 1.0 - exp(-pow(dist * 0.0068, 2.0));',
+                    '    col = mix(col, vec3(0.055, 0.133, 0.239), clamp(fogFactor, 0.0, 1.0));',
+                    '    gl_FragColor = vec4(col, 0.93);',
+                    '}'
+                ].join('\n'),
+                transparent: true,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+
+            oceanMesh = new THREE.Mesh(oceanGeo, mat);
+            oceanMesh.position.y = 0;
+            oceanMesh.renderOrder = 2;
+            scene.add(oceanMesh);
+        }
+
+        function getSeabedHeightAt(x, z) {
+            const duneA = Math.sin(x * 0.09 + 0.6) * Math.cos(z * 0.08 - 0.4) * 1.45;
+            const duneB = Math.sin((x + z) * 0.17) * 0.55;
+            const basin = Math.min(0.0, (Math.hypot(x, z) - 26.0) * -0.04);
+            return SEABED_BASE_Y + duneA + duneB + basin;
+        }
+
+        function buildSeabedFloor() {
+            const seabedGeo = new THREE.PlaneGeometry(260, 260, 140, 140);
+            seabedGeo.rotateX(-Math.PI / 2);
+
+            const posAttr = seabedGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const vx = posAttr.getX(i);
+                const vz = posAttr.getZ(i);
+                posAttr.setY(i, getSeabedHeightAt(vx, vz));
+            }
+            seabedGeo.computeVertexNormals();
+
+            seabedUniforms = {
+                uTime: { value: 0 },
+                uSunDir: { value: new THREE.Vector3(35, 55, -25).normalize() }
+            };
+
+            const seabedMat = new THREE.ShaderMaterial({
+                uniforms: seabedUniforms,
+                vertexShader: [
+                    'uniform float uTime;',
+                    'varying vec3 vWorldPos;',
+                    'varying vec3 vNormal;',
+                    'void main() {',
+                    '    vec4 wp = modelMatrix * vec4(position, 1.0);',
+                    '    vWorldPos = wp.xyz;',
+                    '    vNormal = normalize(normalMatrix * normal);',
+                    '    gl_Position = projectionMatrix * viewMatrix * wp;',
+                    '}'
+                ].join('\n'),
+                fragmentShader: [
+                    'uniform float uTime;',
+                    'uniform vec3 uSunDir;',
+                    'varying vec3 vWorldPos;',
+                    'varying vec3 vNormal;',
+                    'float hash(vec2 p) {',
+                    '    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
+                    '}',
+                    'float noise(vec2 p) {',
+                    '    vec2 i = floor(p);',
+                    '    vec2 f = fract(p);',
+                    '    f = f * f * (3.0 - 2.0 * f);',
+                    '    return mix(',
+                    '        mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),',
+                    '        mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),',
+                    '        f.y',
+                    '    );',
+                    '}',
+                    'void main() {',
+                    '    vec2 p = vWorldPos.xz;',
+                    '    float ripple = sin(p.x * 2.3 + p.y * 1.4 + noise(p * 0.4) * 3.0) * 0.5 + 0.5;',
+                    '    float grain = noise(p * 3.8);',
+                    '    vec3 sandDark = vec3(0.055, 0.085, 0.115);',
+                    '    vec3 sandLight = vec3(0.14, 0.19, 0.22);',
+                    '    vec3 col = mix(sandDark, sandLight, ripple * 0.55 + grain * 0.45);',
+                    '    float c1 = noise(p * 0.55 + vec2(uTime * 0.22, -uTime * 0.16));',
+                    '    float c2 = noise(p * 1.15 - vec2(uTime * 0.19, uTime * 0.27));',
+                    '    float caustics = pow(clamp(c1 * c2 * 2.5, 0.0, 1.0), 2.4);',
+                    '    col += vec3(0.12, 0.45, 0.58) * caustics * 0.55;',
+                    '    float diff = max(dot(normalize(vNormal), normalize(uSunDir)), 0.18);',
+                    '    col *= (0.45 + diff * 0.65);',
+                    '    float dist = length(cameraPosition - vWorldPos);',
+                    '    float fogFactor = 1.0 - exp(-pow(dist * 0.024, 2.0));',
+                    '    col = mix(col, vec3(0.012, 0.133, 0.22), clamp(fogFactor, 0.0, 1.0));',
+                    '    gl_FragColor = vec4(col, 1.0);',
+                    '}'
+                ].join('\n')
+            });
+
+            seabedMesh = new THREE.Mesh(seabedGeo, seabedMat);
+            seabedMesh.receiveShadow = true;
+            scene.add(seabedMesh);
+
+            const rockGroup = new THREE.Group();
+            const rockMat = new THREE.MeshStandardMaterial({
+                color: 0x1e2d3b,
+                roughness: 0.92,
+                metalness: 0.08,
+                flatShading: true
+            });
+            for (let i = 0; i < 65; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 5 + Math.random() * 58;
+                const rx = Math.cos(angle) * radius;
+                const rz = Math.sin(angle) * radius;
+                const sy = getSeabedHeightAt(rx, rz);
+                const rGeo = new THREE.DodecahedronGeometry(0.55 + Math.random() * 1.65, 0);
+                const rock = new THREE.Mesh(rGeo, rockMat);
+                rock.position.set(rx, sy + 0.15, rz);
+                rock.rotation.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
+                rock.scale.set(1 + Math.random() * 0.9, 0.5 + Math.random() * 0.7, 1 + Math.random() * 0.9);
+                rockGroup.add(rock);
+            }
+            scene.add(rockGroup);
+        }
+
+        function buildUnderwaterBubbles() {
+            const bubbleGeo = new THREE.SphereGeometry(0.09, 8, 8);
+            const bubbleMat = new THREE.MeshBasicMaterial({
+                color: 0xbae6fd,
+                transparent: true,
+                opacity: 0.55
+            });
+
+            for (let i = 0; i < 120; i++) {
+                const mesh = new THREE.Mesh(bubbleGeo, bubbleMat);
+                const scale = 0.45 + Math.random() * 1.35;
+                mesh.scale.setScalar(scale);
+                const x = (Math.random() - 0.5) * 68;
+                const z = (Math.random() - 0.5) * 48;
+                const y = SEABED_BASE_Y + Math.random() * 17.5;
+                mesh.position.set(x, y, z);
+                scene.add(mesh);
+                bubbleParticles.push({
+                    mesh: mesh,
+                    speed: 1.4 + Math.random() * 2.4,
+                    wobblePhase: Math.random() * Math.PI * 2,
+                    wobbleAmp: 0.25 + Math.random() * 0.55
+                });
+            }
+        }
+
+        function buildRainSystem() {
+            const maxDrops = 1200;
+            const positions = new Float32Array(maxDrops * 6);
+            const velocities = new Float32Array(maxDrops);
+
+            for (let i = 0; i < maxDrops; i++) {
+                const x = (Math.random() - 0.5) * 90;
+                const y = Math.random() * 42;
+                const z = (Math.random() - 0.5) * 75;
+                const len = 0.95;
+                const idx = i * 6;
+                positions[idx] = x;
+                positions[idx + 1] = y;
+                positions[idx + 2] = z;
+                positions[idx + 3] = x + 0.18;
+                positions[idx + 4] = y - len;
+                positions[idx + 5] = z + 0.12;
+                velocities[i] = 28 + Math.random() * 14;
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.LineBasicMaterial({
+                color: 0xbae6fd,
+                transparent: true,
+                opacity: 0.42
+            });
+
+            rainSystem = new THREE.LineSegments(geo, mat);
+            rainSystem.userData = { velocities: velocities, activeCount: 0 };
+            rainSystem.visible = false;
+            scene.add(rainSystem);
+        }
+
+        function setWeatherEnvironment(weatherKey, silent = false) {
+            const preset = WEATHER_PRESETS[weatherKey] || WEATHER_PRESETS.CLEAR;
+            gameState.weather = weatherKey;
+            if (!silent) sfx.playClick();
+
+            ['CLEAR', 'RAIN', 'FOG', 'STORM'].forEach(key => {
+                const btn = document.getElementById('wx-' + key.toLowerCase());
+                if (btn) btn.classList.toggle('btn-active', key === weatherKey);
+            });
+
+            if (skyMat) {
+                skyMat.uniforms.topColor.value.setHex(preset.skyTop);
+                skyMat.uniforms.horizonColor.value.setHex(preset.skyHorizon);
+                skyMat.uniforms.sunGlowColor.value.setHex(preset.sunGlow);
+            }
+
+            if (oceanUniforms) {
+                oceanUniforms.uDeepColor.value.setHex(preset.oceanDeep);
+                oceanUniforms.uShallowColor.value.setHex(preset.oceanShallow);
+                oceanUniforms.uSwellScale.value = preset.swellScale;
+            }
+
+            if (rainSystem) {
+                rainSystem.userData.activeCount = preset.rainCount;
+                rainSystem.visible = preset.rainCount > 0 && !isCameraUnderwater;
+                rainSystem.geometry.setDrawRange(0, preset.rainCount * 2);
+            }
+
+            if (!isCameraUnderwater) {
+                scene.background.setHex(preset.fogColor);
+                scene.fog.color.setHex(preset.fogColor);
+                scene.fog.density = preset.fogDensity;
+                hemiLight.color.setHex(preset.hemiSky);
+                hemiLight.groundColor.setHex(preset.hemiGround);
+                sunLight.color.setHex(preset.sunColor);
+                sunLight.intensity = preset.sunIntensity;
+            }
+
+            if (!silent && gameState.phase === 'BATTLE') {
+                logCombat('METEOROLOGY UPDATE: Sector weather shifted to ' + preset.label + '.', 'text-sky-300');
+            }
+        }
+
+        function updateWeatherEffects(elapsed, dt) {
+            const preset = WEATHER_PRESETS[gameState.weather] || WEATHER_PRESETS.CLEAR;
+
+            if (rainSystem) {
+                const showRain = preset.rainCount > 0 && !isCameraUnderwater;
+                rainSystem.visible = showRain;
+                if (showRain) {
+                    const posAttr = rainSystem.geometry.attributes.position;
+                    const vels = rainSystem.userData.velocities;
+                    const count = preset.rainCount;
+                    const windX = gameState.weather === 'STORM' ? 6.5 : 3.2;
+                    const windZ = gameState.weather === 'STORM' ? 3.5 : 1.6;
+                    const streakLen = gameState.weather === 'STORM' ? 1.45 : 0.95;
+
+                    for (let i = 0; i < count; i++) {
+                        const idx = i * 6;
+                        let x = posAttr.array[idx] + windX * dt;
+                        let y = posAttr.array[idx + 1] - vels[i] * dt;
+                        let z = posAttr.array[idx + 2] + windZ * dt;
+
+                        if (y < 0.1) {
+                            x = camera.position.x + (Math.random() - 0.5) * 85;
+                            y = 32 + Math.random() * 14;
+                            z = camera.position.z + (Math.random() - 0.5) * 65;
+                        }
+
+                        posAttr.array[idx] = x;
+                        posAttr.array[idx + 1] = y;
+                        posAttr.array[idx + 2] = z;
+                        posAttr.array[idx + 3] = x + windX * 0.045;
+                        posAttr.array[idx + 4] = y - streakLen;
+                        posAttr.array[idx + 5] = z + windZ * 0.045;
+                    }
+                    posAttr.needsUpdate = true;
+                }
+            }
+
+            if (lightningLight) {
+                if (preset.lightningChance > 0 && !isCameraUnderwater) {
+                    if (lightningFlashTimer > 0) {
+                        lightningFlashTimer -= dt;
+                        lightningLight.intensity = Math.max(0, (lightningFlashTimer / 0.25) * 7.5);
+                    } else {
+                        lightningLight.intensity = 0;
+                        if (Math.random() < preset.lightningChance * dt) {
+                            lightningFlashTimer = 0.25;
+                            lightningLight.position.set(
+                                (Math.random() - 0.5) * 70,
+                                60,
+                                (Math.random() - 0.5) * 50
+                            );
+                            if (Math.random() < 0.7) {
+                                sfx.playThunderClap();
+                            }
+                        }
+                    }
+                } else {
+                    lightningLight.intensity = 0;
+                    lightningFlashTimer = 0;
+                }
+            }
+        }
+
+        function triggerOceanShockwave(worldPos, elapsedTime, strength = 1.0) {
+            if (!oceanUniforms) return;
+            const idx = impactCursor % MAX_OCEAN_IMPACTS;
+            impactCursor++;
+            oceanUniforms.uImpactCenters.value[idx].set(worldPos.x, 0, worldPos.z);
+            impactTimes[idx] = elapsedTime;
+            impactStrengths[idx] = strength;
+            oceanUniforms.uImpactTimes.value = impactTimes;
+            oceanUniforms.uImpactStrengths.value = impactStrengths;
+        }
+
+        function buildTacticalGrids() {
+            gridCellMeshes.friendly = [];
+            gridCellMeshes.enemy = [];
+
+            const createBoardVisual = (boardId, targetGroup, storeArr, accentHex) => {
+                const center = BOARD_CENTERS[boardId];
+                const frameGeo = new THREE.BoxGeometry(GRID_SPAN + 0.9, 0.16, GRID_SPAN + 0.9);
+                const frameMat = new THREE.MeshStandardMaterial({
+                    color: 0x0f243a,
+                    roughness: 0.45,
+                    metalness: 0.65,
+                    transparent: true,
+                    opacity: 0.72
+                });
+                const frame = new THREE.Mesh(frameGeo, frameMat);
+                frame.position.set(center.x, -0.04, center.z);
+                frame.receiveShadow = true;
+                targetGroup.add(frame);
+
+                const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(GRID_SPAN + 0.12, 0.22, GRID_SPAN + 0.12));
+                const borderMat = new THREE.LineBasicMaterial({ color: accentHex, transparent: true, opacity: 0.65 });
+                const borderLines = new THREE.LineSegments(borderGeo, borderMat);
+                borderLines.position.set(center.x, 0.02, center.z);
+                targetGroup.add(borderLines);
+
+                const cellGeo = new THREE.PlaneGeometry(CELL_SIZE * 0.92, CELL_SIZE * 0.92);
+                cellGeo.rotateX(-Math.PI / 2);
+
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const pos = gridToWorld(boardId, r, c, 0.08);
+                        const cellMat = new THREE.MeshBasicMaterial({
+                            color: accentHex,
+                            transparent: true,
+                            opacity: 0.07,
+                            depthWrite: false
+                        });
+                        const cellMesh = new THREE.Mesh(cellGeo, cellMat);
+                        cellMesh.position.copy(pos);
+                        cellMesh.userData = { boardId, row: r, col: c, baseOpacity: 0.07, baseColor: accentHex };
+                        targetGroup.add(cellMesh);
+                        storeArr.push(cellMesh);
+
+                        const edges = new THREE.EdgesGeometry(new THREE.PlaneGeometry(CELL_SIZE * 0.96, CELL_SIZE * 0.96).rotateX(-Math.PI / 2));
+                        const lineMat = new THREE.LineBasicMaterial({
+                            color: accentHex,
+                            transparent: true,
+                            opacity: 0.22
+                        });
+                        const line = new THREE.LineSegments(edges, lineMat);
+                        line.position.set(pos.x, 0.06, pos.z);
+                        targetGroup.add(line);
+                    }
+                }
+            };
+
+            createBoardVisual(1, friendlyBoardGroup, gridCellMeshes.friendly, 0x38bdf8);
+            createBoardVisual(2, enemyBoardGroup, gridCellMeshes.enemy, 0xf43f5e);
+        }
+
+        function gridToWorld(boardId, row, col, y = 0.15) {
+            const center = BOARD_CENTERS[boardId];
+            const startX = center.x - GRID_SPAN * 0.5 + CELL_SIZE * 0.5;
+            const startZ = center.z - GRID_SPAN * 0.5 + CELL_SIZE * 0.5;
+            return new THREE.Vector3(startX + col * CELL_SIZE, y, startZ + row * CELL_SIZE);
+        }
+
+        function getConcealedFiringOrigin(targetWorldPos) {
+            const sideSign = targetWorldPos.x >= 0 ? -1 : 1;
+            const offsetX = sideSign * (24 + Math.random() * 8);
+            const offsetZ = (Math.random() - 0.5) * 26;
+            const altitude = 9.5 + Math.random() * 3.5;
+            return new THREE.Vector3(
+                targetWorldPos.x * 0.25 + offsetX,
+                altitude,
+                targetWorldPos.z * 0.45 + offsetZ
+            );
+        }
+
+        // =========================================================================
+        // PROCEDURAL 3D WARSHIP MODELS
+        // =========================================================================
+        function createWarshipMesh(spec, lengthCells) {
+            const group = new THREE.Group();
+            const totalLen = lengthCells * CELL_SIZE * 0.9;
+            const beam = CELL_SIZE * 0.62;
+
+            const hullMat = new THREE.MeshStandardMaterial({
+                color: spec.color,
+                roughness: 0.48,
+                metalness: 0.55
+            });
+            const deckMat = new THREE.MeshStandardMaterial({
+                color: 0x1e293b,
+                roughness: 0.75,
+                metalness: 0.25
+            });
+            const superMat = new THREE.MeshStandardMaterial({
+                color: 0xcbd5e1,
+                roughness: 0.4,
+                metalness: 0.4
+            });
+            const accentMat = new THREE.MeshStandardMaterial({
+                color: spec.accent,
+                roughness: 0.35,
+                metalness: 0.5,
+                emissive: spec.accent,
+                emissiveIntensity: 0.15
+            });
+            const keelMat = new THREE.MeshStandardMaterial({
+                color: 0x7f1d1d,
+                roughness: 0.65,
+                metalness: 0.35
+            });
+            const brassMat = new THREE.MeshStandardMaterial({
+                color: 0xb45309,
+                roughness: 0.32,
+                metalness: 0.85
+            });
+
+            const hullGeo = new THREE.BoxGeometry(totalLen * 0.86, 0.55, beam);
+            const hull = new THREE.Mesh(hullGeo, hullMat);
+            hull.position.y = 0.28;
+            hull.castShadow = true;
+            hull.receiveShadow = true;
+            group.add(hull);
+
+            const keelGeo = new THREE.BoxGeometry(totalLen * 0.78, 0.62, beam * 0.56);
+            const keel = new THREE.Mesh(keelGeo, keelMat);
+            keel.position.y = -0.3;
+            group.add(keel);
+
+            const rudderGeo = new THREE.BoxGeometry(0.32, 0.48, 0.08);
+            const rudder = new THREE.Mesh(rudderGeo, keelMat);
+            rudder.position.set(-totalLen * 0.44, -0.26, 0);
+            group.add(rudder);
+
+            const propGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.12, 8);
+            propGeo.rotateZ(Math.PI / 2);
+            [-0.22, 0.22].forEach(zOff => {
+                const prop = new THREE.Mesh(propGeo, brassMat);
+                prop.position.set(-totalLen * 0.46, -0.32, zOff);
+                group.add(prop);
+            });
+
+            const bowGeo = new THREE.ConeGeometry(beam * 0.71, totalLen * 0.22, 4);
+            bowGeo.rotateZ(-Math.PI / 2);
+            bowGeo.rotateX(Math.PI / 4);
+            const bow = new THREE.Mesh(bowGeo, hullMat);
+            bow.position.set(totalLen * 0.43 + (totalLen * 0.11) * 0.65, 0.28, 0);
+            bow.scale.set(1, 0.72, 1);
+            bow.castShadow = true;
+            group.add(bow);
+
+            const sternGeo = new THREE.BoxGeometry(totalLen * 0.12, 0.5, beam * 0.84);
+            const stern = new THREE.Mesh(sternGeo, hullMat);
+            stern.position.set(-totalLen * 0.45, 0.26, 0);
+            stern.castShadow = true;
+            group.add(stern);
+
+            const turrets = [];
+
+            if (spec.id === 'carrier') {
+                const flightDeck = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.96, 0.14, beam * 1.18), deckMat);
+                flightDeck.position.set(0.1, 0.6, 0);
+                flightDeck.castShadow = true;
+                flightDeck.receiveShadow = true;
+                group.add(flightDeck);
+
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.88, 0.03, 0.12), accentMat);
+                stripe.position.set(0.1, 0.68, 0);
+                group.add(stripe);
+
+                const island = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.18, 0.65, beam * 0.26), superMat);
+                island.position.set(totalLen * 0.05, 0.95, -beam * 0.42);
+                island.castShadow = true;
+                group.add(island);
+
+                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.55, 8), accentMat);
+                mast.position.set(totalLen * 0.05, 1.48, -beam * 0.42);
+                group.add(mast);
+
+                const planeGeo = new THREE.ConeGeometry(0.14, 0.55, 6);
+                planeGeo.rotateZ(-Math.PI / 2);
+                [-totalLen * 0.22, totalLen * 0.24].forEach((px, idx) => {
+                    const jet = new THREE.Mesh(planeGeo, superMat);
+                    jet.position.set(px, 0.72, idx === 0 ? 0.28 : -0.15);
+                    group.add(jet);
+                });
+            } else if (spec.id === 'submarine') {
+                // THREE.r128 does not include CapsuleGeometry; build a rounded cylinder + hemisphere endcaps
+                const radius = beam * 0.42;
+                const cylLen = Math.max(0.2, totalLen * 0.56);
+                const subGroup = new THREE.Group();
+
+                const subCyl = new THREE.Mesh(
+                    new THREE.CylinderGeometry(radius, radius, cylLen, 16),
+                    hullMat
+                );
+                subCyl.rotation.z = Math.PI / 2;
+                subCyl.castShadow = true;
+                subCyl.receiveShadow = true;
+                subGroup.add(subCyl);
+
+                const capGeo = new THREE.SphereGeometry(radius, 16, 12);
+                const foreCap = new THREE.Mesh(capGeo, hullMat);
+                foreCap.position.x = cylLen * 0.5;
+                foreCap.castShadow = true;
+                subGroup.add(foreCap);
+
+                const aftCap = new THREE.Mesh(capGeo, hullMat);
+                aftCap.position.x = -cylLen * 0.5;
+                aftCap.castShadow = true;
+                subGroup.add(aftCap);
+
+                subGroup.position.y = 0.22;
+                group.add(subGroup);
+
+                const sail = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.16, 0.55, beam * 0.26), superMat);
+                sail.position.set(0.1, 0.62, 0);
+                sail.castShadow = true;
+                group.add(sail);
+
+                const periscope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.35, 8), accentMat);
+                periscope.position.set(0.18, 0.98, 0);
+                group.add(periscope);
+            } else {
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.82, 0.08, beam * 0.88), deckMat);
+                deck.position.y = 0.56;
+                group.add(deck);
+
+                const bridge = new THREE.Mesh(new THREE.BoxGeometry(totalLen * 0.22, 0.52, beam * 0.46), superMat);
+                bridge.position.set(-totalLen * 0.04, 0.84, 0);
+                bridge.castShadow = true;
+                group.add(bridge);
+
+                const radar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.38, 0.36), accentMat);
+                radar.position.set(-totalLen * 0.04, 1.25, 0);
+                group.add(radar);
+
+                const turretOffsets = spec.id === 'battleship'
+                    ? [totalLen * 0.26, -totalLen * 0.28]
+                    : [totalLen * 0.24];
+
+                turretOffsets.forEach(tx => {
+                    const turretGroup = new THREE.Group();
+                    turretGroup.position.set(tx, 0.64, 0);
+
+                    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.22, 12), superMat);
+                    base.castShadow = true;
+                    turretGroup.add(base);
+
+                    const barrelLen = spec.id === 'battleship' ? 0.72 : 0.52;
+                    const barrelGeo = new THREE.CylinderGeometry(0.045, 0.055, barrelLen, 8);
+                    barrelGeo.rotateZ(-Math.PI / 2);
+
+                    if (spec.id === 'battleship') {
+                        [-0.09, 0.09].forEach(zOff => {
+                            const barrel = new THREE.Mesh(barrelGeo, hullMat);
+                            barrel.position.set(barrelLen * 0.45, 0.04, zOff);
+                            turretGroup.add(barrel);
+                        });
+                    } else {
+                        const barrel = new THREE.Mesh(barrelGeo, hullMat);
+                        barrel.position.set(barrelLen * 0.45, 0.04, 0);
+                        turretGroup.add(barrel);
+                    }
+
+                    group.add(turretGroup);
+                    turrets.push(turretGroup);
+                });
+            }
+
+            group.userData = { turrets, baseY: 0.0, bobPhase: Math.random() * Math.PI * 2 };
+            return group;
+        }
+
+        // =========================================================================
+        // FLEET DATA & PLACEMENT LOGIC
+        // =========================================================================
+        function createEmptyPlayerState(playerNum, isAI = false) {
+            const grid = Array.from({ length: GRID_SIZE }, () =>
+                Array.from({ length: GRID_SIZE }, () => ({
+                    shipId: null,
+                    hit: false,
+                    miss: false
+                }))
+            );
+
+            return {
+                playerNum,
+                isAI,
+                grid,
+                ships: [],
+                shotsFired: 0,
+                shotsHit: 0
+            };
+        }
+
+        function getShipCells(row, col, length, orientation) {
+            const cells = [];
+            for (let i = 0; i < length; i++) {
+                const r = orientation === 'V' ? row + i : row;
+                const c = orientation === 'H' ? col + i : col;
+                cells.push({ row: r, col: c });
+            }
+            return cells;
+        }
+
+        function canPlaceShip(playerState, row, col, length, orientation) {
+            const cells = getShipCells(row, col, length, orientation);
+            for (const cell of cells) {
+                if (cell.row < 0 || cell.row >= GRID_SIZE || cell.col < 0 || cell.col >= GRID_SIZE) {
+                    return false;
+                }
+                if (playerState.grid[cell.row][cell.col].shipId !== null) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function placeShipOnPlayer(playerState, spec, row, col, orientation) {
+            if (!canPlaceShip(playerState, row, col, spec.length, orientation)) return false;
+            const cells = getShipCells(row, col, spec.length, orientation);
+            const shipObj = {
+                id: spec.id,
+                name: spec.name,
+                hullCode: spec.hullCode,
+                length: spec.length,
+                color: spec.color,
+                accent: spec.accent,
+                row,
+                col,
+                orientation,
+                cells,
+                hits: 0,
+                sunk: false,
+                mesh: null
+            };
+            playerState.ships.push(shipObj);
+            for (const cell of cells) {
+                playerState.grid[cell.row][cell.col].shipId = spec.id;
+            }
+            return true;
+        }
+
+        function removeShipFromPlayer(playerState, shipId) {
+            const idx = playerState.ships.findIndex(s => s.id === shipId);
+            if (idx === -1) return;
+            const ship = playerState.ships[idx];
+            for (const cell of ship.cells) {
+                playerState.grid[cell.row][cell.col].shipId = null;
+            }
+            playerState.ships.splice(idx, 1);
+        }
+
+        function randomizeFleet(playerState) {
+            playerState.ships = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    playerState.grid[r][c].shipId = null;
+                    playerState.grid[r][c].hit = false;
+                    playerState.grid[r][c].miss = false;
+                }
+            }
+
+            for (const spec of SHIP_SPECS) {
+                let placed = false;
+                let guard = 0;
+                while (!placed && guard < 500) {
+                    guard++;
+                    const ori = Math.random() < 0.5 ? 'H' : 'V';
+                    const maxR = ori === 'V' ? GRID_SIZE - spec.length : GRID_SIZE - 1;
+                    const maxC = ori === 'H' ? GRID_SIZE - spec.length : GRID_SIZE - 1;
+                    const r = Math.floor(Math.random() * (maxR + 1));
+                    const c = Math.floor(Math.random() * (maxC + 1));
+                    placed = placeShipOnPlayer(playerState, spec, r, c, ori);
+                }
+            }
+        }
+
+        // =========================================================================
+        // 3D SCENE SYNCHRONIZATION (SHIPS & MARKERS)
+        // =========================================================================
+        function clearGroup(group) {
+            while (group.children.length > 0) {
+                group.remove(group.children[0]);
+            }
+        }
+
+        function sync3DSceneVisuals() {
+            clearGroup(ships3DGroup);
+            clearGroup(markersGroup);
+            damageEmitters.length = 0;
+
+            const showP1Ships = shouldShowPlayerShips(1);
+            const showP2Ships = shouldShowPlayerShips(2);
+
+            if (gameState.players[1]) {
+                renderPlayerShips3D(1, gameState.players[1], showP1Ships);
+                renderPlayerMarkers3D(1, gameState.players[1]);
+            }
+            if (gameState.players[2]) {
+                renderPlayerShips3D(2, gameState.players[2], showP2Ships);
+                renderPlayerMarkers3D(2, gameState.players[2]);
+            }
+
+            for (const item of sinkingShips) {
+                item.mesh = item.ship.mesh;
+                if (item.mesh) applyShipSinkingPose(item);
+            }
+
+            updateGridCellHighlights();
+        }
+
+        function shouldShowPlayerShips(playerNum) {
+            if (isSinkingFinaleActive) return true;
+            if (gameState.phase === 'GAMEOVER') return true;
+            if (gameState.phase === 'SETUP') {
+                return gameState.setupPlayer === playerNum;
+            }
+            if (gameState.phase === 'BATTLE') {
+                if (gameState.mode === 'AI') {
+                    return playerNum === 1;
+                } else {
+                    return playerNum === gameState.activePlayer;
+                }
+            }
+            return false;
+        }
+
+        function renderPlayerShips3D(boardId, playerState, visible) {
+            for (const ship of playerState.ships) {
+                const showThisShip = visible || ship.sunk;
+                if (!showThisShip) continue;
+
+                const mesh = createWarshipMesh(ship, ship.length);
+                const firstCell = ship.cells[0];
+                const lastCell = ship.cells[ship.cells.length - 1];
+                const startPos = gridToWorld(boardId, firstCell.row, firstCell.col, 0);
+                const endPos = gridToWorld(boardId, lastCell.row, lastCell.col, 0);
+
+                mesh.position.set(
+                    (startPos.x + endPos.x) * 0.5,
+                    0,
+                    (startPos.z + endPos.z) * 0.5
+                );
+                mesh.rotation.y = ship.orientation === 'H' ? 0 : Math.PI / 2;
+
+                ships3DGroup.add(mesh);
+                ship.mesh = mesh;
+                if (ship.sinkState) applyShipSinkingPose(ship.sinkState);
+
+                for (const cell of ship.cells) {
+                    if (playerState.grid[cell.row][cell.col].hit) {
+                        const hitWorld = gridToWorld(boardId, cell.row, cell.col, 0.55);
+                        damageEmitters.push({
+                            pos: hitWorld,
+                            timer: Math.random() * 0.2,
+                            sunk: ship.sunk
+                        });
+                    }
+                }
+            }
+        }
+
+        function applyShipSinkingPose(item) {
+            if (!item.mesh) return;
+            if (item.settled) {
+                item.mesh.position.y = item.targetY;
+                item.mesh.rotation.z = item.rollSign * 1.42;
+                item.mesh.rotation.x = 0;
+                return;
+            }
+            const sinkT = Math.min(1, Math.max(0, (item.elapsed - item.delay) / 3.4));
+            const eased = sinkT * sinkT * (3 - 2 * sinkT);
+            item.mesh.position.y = THREE.MathUtils.lerp(item.startY, item.targetY, eased);
+            item.mesh.rotation.z = item.rollSign * (0.24 + eased * 1.18);
+            item.mesh.rotation.x = Math.sin(sinkT * Math.PI) * 0.16;
+        }
+
+        function startShipSinking(ship, boardId) {
+            if (!ship.mesh || ship.sinkState) return;
+            const item = {
+                ship,
+                mesh: ship.mesh,
+                delay: 0,
+                elapsed: 0,
+                startY: ship.mesh.position.y,
+                targetY: getSeabedHeightAt(ship.mesh.position.x, ship.mesh.position.z) + 0.65,
+                rollSign: ship.cells[0].row % 2 === 0 ? 1 : -1,
+                settled: false,
+                bubbleTimer: 0
+            };
+            ship.sinkState = item;
+            sinkingShips.push(item);
+            logCombat(`${ship.name} lost at sea — vessel sinking to the seabed.`, 'text-rose-300');
+        }
+
+        function renderPlayerMarkers3D(boardId, playerState) {
+            const pegGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.45, 10);
+            const missMat = new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0,
+                roughness: 0.3,
+                metalness: 0.2,
+                emissive: 0x38bdf8,
+                emissiveIntensity: 0.15
+            });
+
+            const hitCoreGeo = new THREE.OctahedronGeometry(0.34, 1);
+            const hitMat = new THREE.MeshStandardMaterial({
+                color: 0xef4444,
+                emissive: 0xdc2626,
+                emissiveIntensity: 0.75,
+                roughness: 0.25
+            });
+
+            const ringGeo = new THREE.RingGeometry(0.48, 0.68, 24);
+            ringGeo.rotateX(-Math.PI / 2);
+            const hitRingMat = new THREE.MeshBasicMaterial({
+                color: 0xf87171,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.85
+            });
+            const missRingMat = new THREE.MeshBasicMaterial({
+                color: 0x94a3b8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.55
+            });
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = playerState.grid[r][c];
+                    if (cell.hit) {
+                        const pos = gridToWorld(boardId, r, c, 0.45);
+                        const core = new THREE.Mesh(hitCoreGeo, hitMat);
+                        core.position.copy(pos);
+                        markersGroup.add(core);
+
+                        const ring = new THREE.Mesh(ringGeo, hitRingMat);
+                        ring.position.set(pos.x, 0.1, pos.z);
+                        markersGroup.add(ring);
+                    } else if (cell.miss) {
+                        const pos = gridToWorld(boardId, r, c, 0.16);
+                        const peg = new THREE.Mesh(pegGeo, missMat);
+                        peg.position.copy(pos);
+                        markersGroup.add(peg);
+
+                        const ring = new THREE.Mesh(ringGeo, missRingMat);
+                        ring.position.set(pos.x, 0.09, pos.z);
+                        ring.scale.setScalar(0.75);
+                        markersGroup.add(ring);
+                    }
+                }
+            }
+        }
+
+        function updateGridCellHighlights() {
+            const resetArray = arr => {
+                for (const m of arr) {
+                    m.material.color.setHex(m.userData.baseColor);
+                    m.material.opacity = m.userData.baseOpacity;
+                }
+            };
+            resetArray(gridCellMeshes.friendly);
+            resetArray(gridCellMeshes.enemy);
+
+            if (gameState.phase === 'BATTLE') {
+                const targetBoardId = gameState.mode === 'AI'
+                    ? 2
+                    : (gameState.activePlayer === 1 ? 2 : 1);
+                const targetArr = targetBoardId === 2 ? gridCellMeshes.enemy : gridCellMeshes.friendly;
+                const defender = gameState.players[targetBoardId];
+
+                if (defender) {
+                    for (const m of targetArr) {
+                        const { row, col } = m.userData;
+                        const cell = defender.grid[row][col];
+                        if (!cell.hit && !cell.miss) {
+                            m.material.opacity = 0.13;
+                        }
+                    }
+                }
+            }
+        }
+
+        function updatePlacementPreview() {
+            clearGroup(placementPreviewGroup);
+            if (hoverReticleMesh) hoverReticleMesh.visible = false;
+
+            if (gameState.phase !== 'SETUP' || !gameState.hoveredCell) return;
+
+            const { boardId, row, col } = gameState.hoveredCell;
+            const pState = gameState.players[gameState.setupPlayer];
+            if (!pState || boardId !== gameState.setupPlayer) return;
+
+            const spec = SHIP_SPECS[gameState.selectedShipIndex];
+            if (!spec) return;
+
+            const existing = pState.ships.find(s => s.id === spec.id);
+            if (existing) return;
+
+            const valid = canPlaceShip(pState, row, col, spec.length, gameState.orientation);
+            const cells = getShipCells(row, col, spec.length, gameState.orientation);
+
+            const tileGeo = new THREE.BoxGeometry(CELL_SIZE * 0.88, 0.14, CELL_SIZE * 0.88);
+            const tileMat = new THREE.MeshBasicMaterial({
+                color: valid ? 0x10b981 : 0xef4444,
+                transparent: true,
+                opacity: 0.42
+            });
+
+            for (const cell of cells) {
+                if (cell.row >= 0 && cell.row < GRID_SIZE && cell.col >= 0 && cell.col < GRID_SIZE) {
+                    const wp = gridToWorld(boardId, cell.row, cell.col, 0.14);
+                    const tile = new THREE.Mesh(tileGeo, tileMat);
+                    tile.position.copy(wp);
+                    placementPreviewGroup.add(tile);
+                }
+            }
+
+            if (valid) {
+                const ghost = createWarshipMesh(spec, spec.length);
+                const first = cells[0];
+                const last = cells[cells.length - 1];
+                const p1 = gridToWorld(boardId, first.row, first.col, 0.08);
+                const p2 = gridToWorld(boardId, last.row, last.col, 0.08);
+                ghost.position.set((p1.x + p2.x) * 0.5, 0.08, (p1.z + p2.z) * 0.5);
+                ghost.rotation.y = gameState.orientation === 'H' ? 0 : Math.PI / 2;
+                ghost.traverse(child => {
+                    if (child.isMesh) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.opacity = 0.55;
+                    }
+                });
+                placementPreviewGroup.add(ghost);
+            }
+        }
+
+        // =========================================================================
+        // PROJECTILES, WATER SHOCKWAVES & COMBAT VFX
+        // =========================================================================
+        function launchBallisticShell(startPos, targetPos, onImpact, elapsedTime) {
+            sfx.playCannonLaunch();
+
+            const shellGeo = new THREE.SphereGeometry(0.22, 10, 10);
+            const shellMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+            const shell = new THREE.Mesh(shellGeo, shellMat);
+            shell.position.copy(startPos);
+            projectilesGroup.add(shell);
+
+            const trailGeo = new THREE.SphereGeometry(0.14, 8, 8);
+            const trailMat = new THREE.MeshBasicMaterial({
+                color: 0xf97316,
+                transparent: true,
+                opacity: 0.65
+            });
+            const trail = new THREE.Mesh(trailGeo, trailMat);
+            trail.position.copy(startPos);
+            projectilesGroup.add(trail);
+
+            triggerOceanShockwave(startPos, elapsedTime, 0.45);
+
+            activeProjectiles.push({
+                mesh: shell,
+                trail: trail,
+                start: startPos.clone(),
+                target: targetPos.clone(),
+                progress: 0,
+                duration: 0.72,
+                arcHeight: 11.5,
+                onImpact
+            });
+        }
+
+        function spawnSplashVFX(worldPos, elapsedTime, isHeavy = false) {
+            sfx.playSplash();
+            triggerOceanShockwave(worldPos, elapsedTime, isHeavy ? 1.85 : 1.35);
+
+            const ringGeo = new THREE.RingGeometry(0.25, 0.55, 32);
+            ringGeo.rotateX(-Math.PI / 2);
+            for (let r = 0; r < 3; r++) {
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: r === 0 ? 0xffffff : 0xbae6fd,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.9 - r * 0.22
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.set(worldPos.x, 0.12 + r * 0.03, worldPos.z);
+                effectsGroup.add(ring);
+
+                activeEffects.push({
+                    mesh: ring,
+                    type: 'ring',
+                    age: -r * 0.11,
+                    maxAge: 1.15,
+                    maxScale: (isHeavy ? 6.2 : 4.5) + r * 1.4
+                });
+            }
+
+            const dropGeo = new THREE.BoxGeometry(0.14, 0.55, 0.14);
+            const dropMat = new THREE.MeshBasicMaterial({
+                color: 0xe0f2fe,
+                transparent: true,
+                opacity: 0.92
+            });
+            const count = isHeavy ? 34 : 24;
+            for (let i = 0; i < count; i++) {
+                const drop = new THREE.Mesh(dropGeo, dropMat);
+                drop.position.set(worldPos.x, 0.2, worldPos.z);
+                const angle = Math.random() * Math.PI * 2;
+                const spread = (isHeavy ? 2.4 : 1.7) + Math.random() * (isHeavy ? 4.2 : 2.8);
+                const vy = (isHeavy ? 8.5 : 6.2) + Math.random() * 5.2;
+                effectsGroup.add(drop);
+
+                activeEffects.push({
+                    mesh: drop,
+                    type: 'particle',
+                    vel: new THREE.Vector3(Math.cos(angle) * spread, vy, Math.sin(angle) * spread),
+                    gravity: 19.5,
+                    age: 0,
+                    maxAge: 0.85 + Math.random() * 0.35
+                });
+            }
+        }
+
+        function spawnExplosionVFX(worldPos, elapsedTime, heavy = false) {
+            sfx.playExplosion(heavy);
+            triggerOceanShockwave(worldPos, elapsedTime, heavy ? 2.6 : 1.9);
+
+            const flashGeo = new THREE.SphereGeometry(heavy ? 1.55 : 1.05, 16, 16);
+            const flashMat = new THREE.MeshBasicMaterial({
+                color: 0xfef08a,
+                transparent: true,
+                opacity: 0.95
+            });
+            const flash = new THREE.Mesh(flashGeo, flashMat);
+            flash.position.copy(worldPos);
+            effectsGroup.add(flash);
+
+            activeEffects.push({
+                mesh: flash,
+                type: 'flash',
+                age: 0,
+                maxAge: 0.35,
+                maxScale: heavy ? 2.8 : 2.0
+            });
+
+            const shockGeo = new THREE.RingGeometry(0.3, 0.65, 32);
+            shockGeo.rotateX(-Math.PI / 2);
+            const shockMat = new THREE.MeshBasicMaterial({
+                color: 0xfb923c,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.85
+            });
+            const shockRing = new THREE.Mesh(shockGeo, shockMat);
+            shockRing.position.set(worldPos.x, 0.18, worldPos.z);
+            effectsGroup.add(shockRing);
+
+            activeEffects.push({
+                mesh: shockRing,
+                type: 'ring',
+                age: 0,
+                maxAge: 0.95,
+                maxScale: heavy ? 6.8 : 4.6
+            });
+
+            const sparkGeo = new THREE.DodecahedronGeometry(0.24, 0);
+            const colors = [0xffedd5, 0xf97316, 0xef4444, 0x334155];
+            const count = heavy ? 42 : 24;
+
+            for (let i = 0; i < count; i++) {
+                const cHex = colors[i % colors.length];
+                const mat = new THREE.MeshBasicMaterial({
+                    color: cHex,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const p = new THREE.Mesh(sparkGeo, mat);
+                p.position.copy(worldPos);
+                const angle = Math.random() * Math.PI * 2;
+                const speed = (heavy ? 4.5 : 2.8) + Math.random() * (heavy ? 6.5 : 4.2);
+                const vy = (heavy ? 5.5 : 3.8) + Math.random() * 5.0;
+                effectsGroup.add(p);
+
+                activeEffects.push({
+                    mesh: p,
+                    type: 'particle',
+                    vel: new THREE.Vector3(Math.cos(angle) * speed, vy, Math.sin(angle) * speed),
+                    gravity: 13.5,
+                    age: 0,
+                    maxAge: 0.75 + Math.random() * 0.45
+                });
+            }
+        }
+
+        function spawnDamageSmoke(worldPos, isHeavyFire) {
+            const geo = new THREE.SphereGeometry(isHeavyFire ? 0.24 : 0.17, 8, 8);
+            const isFlame = isHeavyFire && Math.random() < 0.45;
+            const mat = new THREE.MeshBasicMaterial({
+                color: isFlame ? 0xf97316 : 0x475569,
+                transparent: true,
+                opacity: isFlame ? 0.8 : 0.48
+            });
+            const puff = new THREE.Mesh(geo, mat);
+            puff.position.set(
+                worldPos.x + (Math.random() - 0.5) * 0.35,
+                worldPos.y,
+                worldPos.z + (Math.random() - 0.5) * 0.35
+            );
+            effectsGroup.add(puff);
+
+            activeEffects.push({
+                mesh: puff,
+                type: 'smoke',
+                vel: new THREE.Vector3((Math.random() - 0.5) * 0.6, 1.8 + Math.random() * 1.2, (Math.random() - 0.5) * 0.6),
+                age: 0,
+                maxAge: 1.35 + Math.random() * 0.5
+            });
+        }
+
+        function spawnUnderwaterBubbleBurst(worldPos, count = 10) {
+            const geo = new THREE.SphereGeometry(0.11, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0xe0f2fe,
+                transparent: true,
+                opacity: 0.72
+            });
+            for (let i = 0; i < count; i++) {
+                const b = new THREE.Mesh(geo, mat);
+                b.position.set(
+                    worldPos.x + (Math.random() - 0.5) * 1.6,
+                    worldPos.y + (Math.random() - 0.5) * 0.6,
+                    worldPos.z + (Math.random() - 0.5) * 1.6
+                );
+                effectsGroup.add(b);
+                activeEffects.push({
+                    mesh: b,
+                    type: 'bubble',
+                    vel: new THREE.Vector3((Math.random() - 0.5) * 0.7, 2.8 + Math.random() * 2.5, (Math.random() - 0.5) * 0.7),
+                    age: 0,
+                    maxAge: 1.4 + Math.random() * 0.7
+                });
+            }
+        }
+
+        function spawnSeabedSiltCloud(worldPos) {
+            const geo = new THREE.DodecahedronGeometry(0.55, 1);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0x64748b,
+                transparent: true,
+                opacity: 0.55
+            });
+            for (let i = 0; i < 14; i++) {
+                const cloud = new THREE.Mesh(geo, mat);
+                cloud.position.set(worldPos.x, worldPos.y + 0.2, worldPos.z);
+                const ang = (i / 14) * Math.PI * 2;
+                const spd = 1.6 + Math.random() * 2.4;
+                effectsGroup.add(cloud);
+                activeEffects.push({
+                    mesh: cloud,
+                    type: 'silt',
+                    vel: new THREE.Vector3(Math.cos(ang) * spd, 0.5 + Math.random() * 1.1, Math.sin(ang) * spd),
+                    age: 0,
+                    maxAge: 1.5 + Math.random() * 0.5
+                });
+            }
+        }
+
+        // =========================================================================
+        // FLEET COLLAPSE & SINKING TO SEABED FINALE
+        // =========================================================================
+        function triggerFleetCollapseToSeabed(losingBoardId, losingPlayerState, winnerTitle, winnerBadge, winnerSubtitle) {
+            isSinkingFinaleActive = true;
+            sinkingFinaleTimer = 0;
+            sinkingShips.length = 0;
+
+            pendingGameOverPayload = {
+                title: winnerTitle,
+                badge: winnerBadge,
+                subtitle: winnerSubtitle
+            };
+
+            sync3DSceneVisuals();
+            sfx.playSinkingGroan();
+
+            const boardCenter = BOARD_CENTERS[losingBoardId];
+            const divePos = new THREE.Vector3(
+                boardCenter.x + (losingBoardId === 1 ? 4.5 : -4.5),
+                -6.8,
+                21.5
+            );
+            const diveLook = new THREE.Vector3(boardCenter.x, -9.5, 0);
+            animateCameraTo(divePos, diveLook, 1.1);
+
+            losingPlayerState.ships.forEach((ship, idx) => {
+                if (!ship.mesh) {
+                    ship.mesh = createWarshipMesh(ship, ship.length);
+                    const first = ship.cells[0];
+                    const last = ship.cells[ship.cells.length - 1];
+                    const p1 = gridToWorld(losingBoardId, first.row, first.col, 0);
+                    const p2 = gridToWorld(losingBoardId, last.row, last.col, 0);
+                    ship.mesh.position.set((p1.x + p2.x) * 0.5, 0, (p1.z + p2.z) * 0.5);
+                    ship.mesh.rotation.y = ship.orientation === 'H' ? 0 : Math.PI / 2;
+                    ships3DGroup.add(ship.mesh);
+                }
+
+                const targetFloorY = getSeabedHeightAt(ship.mesh.position.x, ship.mesh.position.z) + 0.65;
+                sinkingShips.push({
+                    ship,
+                    mesh: ship.mesh,
+                    delay: idx * 0.42,
+                    elapsed: 0,
+                    startY: ship.mesh.position.y,
+                    targetY: targetFloorY,
+                    rollSign: idx % 2 === 0 ? 1 : -1,
+                    settled: false,
+                    bubbleTimer: 0
+                });
+            });
+
+            showCallout('FLEET DESTROYED', 'VESSELS SINKING TO SEABED', 'text-rose-400', 2800);
+            logCombat('CRITICAL: Entire hostile/allied strike force lost — vessels sinking to ocean floor!', 'text-rose-400');
+        }
+
+        function updateSinkingShips(dt) {
+            if (sinkingShips.length === 0) return;
+
+            let allSettled = true;
+            for (const item of sinkingShips) {
+                item.elapsed += dt;
+                if (item.elapsed < item.delay) {
+                    allSettled = false;
+                    continue;
+                }
+
+                const sinkT = Math.min(1, (item.elapsed - item.delay) / 3.4);
+                const eased = sinkT * sinkT * (3 - 2 * sinkT);
+
+                if (!item.settled) {
+                    allSettled = false;
+                    item.mesh.position.y = THREE.MathUtils.lerp(item.startY, item.targetY, eased);
+                    item.mesh.rotation.z = item.rollSign * (0.24 + eased * 1.18);
+                    item.mesh.rotation.x = Math.sin(sinkT * Math.PI) * 0.16;
+
+                    item.bubbleTimer -= dt;
+                    if (item.bubbleTimer <= 0 && item.mesh.position.y < 0.2) {
+                        item.bubbleTimer = 0.16;
+                        spawnUnderwaterBubbleBurst(item.mesh.position, 4);
+                    }
+
+                    if (sinkT >= 1.0) {
+                        item.settled = true;
+                        item.mesh.position.y = item.targetY;
+                        item.mesh.rotation.z = item.rollSign * 1.42;
+                        spawnSeabedSiltCloud(item.mesh.position);
+                        spawnUnderwaterBubbleBurst(item.mesh.position, 10);
+                    }
+                }
+            }
+
+            if (isSinkingFinaleActive && allSettled) {
+                sinkingFinaleTimer += dt;
+                if (sinkingFinaleTimer >= 1.15) {
+                    isSinkingFinaleActive = false;
+                    sinkingFinaleTimer = 0;
+                    finalizeGameOverModal();
+                }
+            }
+        }
+
+        // =========================================================================
+        // GAME FLOW, COMBAT & AI COMMANDER
+        // =========================================================================
+        function selectGameMode(mode) {
+            gameState.mode = mode;
+            sfx.playClick();
+            document.getElementById('mode-ai-btn').classList.toggle('btn-active', mode === 'AI');
+            document.getElementById('mode-pvp-btn').classList.toggle('btn-active', mode === 'PVP');
+            document.getElementById('ai-difficulty-section').style.display = mode === 'AI' ? 'block' : 'none';
+        }
+
+        function selectAIDifficulty(diff) {
+            gameState.difficulty = diff;
+            sfx.playClick();
+            ['EASY', 'MEDIUM', 'HARD'].forEach(d => {
+                const el = document.getElementById('diff-' + d.toLowerCase());
+                if (el) el.classList.toggle('btn-active', d === diff);
+            });
+        }
+
+        function selectMenuWeather(wx) {
+            sfx.playClick();
+            ['CLEAR', 'RAIN', 'FOG', 'STORM'].forEach(w => {
+                const el = document.getElementById('menu-wx-' + w.toLowerCase());
+                if (el) el.classList.toggle('btn-active', w === wx);
+            });
+            setWeatherEnvironment(wx, true);
+        }
+
+        function openMainMenu() {
+            sfx.playClick();
+            gameState.phase = 'MENU';
+            isSinkingFinaleActive = false;
+            sinkingShips.length = 0;
+            document.getElementById('main-menu-modal').classList.remove('hidden');
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('handoff-modal').classList.add('hidden');
+            document.getElementById('setup-dock').classList.add('hidden');
+            document.getElementById('battle-dock').classList.add('hidden');
+            document.getElementById('show-summary-btn').classList.add('hidden');
+            document.getElementById('phase-status').textContent = 'AWAITING DEPLOYMENT ORDERS';
+            setCameraView('TACTICAL');
+        }
+
+        function startNewMatch() {
+            sfx.playClick();
+            isSinkingFinaleActive = false;
+            sinkingShips.length = 0;
+            pendingGameOverPayload = null;
+            activeProjectiles.length = 0;
+            clearGroup(projectilesGroup);
+            clearGroup(effectsGroup);
+
+            gameState.players[1] = createEmptyPlayerState(1, false);
+            gameState.players[2] = createEmptyPlayerState(2, gameState.mode === 'AI');
+            gameState.activePlayer = 1;
+            gameState.setupPlayer = 1;
+            gameState.selectedShipIndex = 0;
+            gameState.orientation = 'H';
+            gameState.turnCount = 1;
+            gameState.aiMemory = { hitStack: [], huntDirection: null };
+
+            if (gameState.mode === 'AI') {
+                randomizeFleet(gameState.players[2]);
+            }
+
+            document.getElementById('main-menu-modal').classList.add('hidden');
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('handoff-modal').classList.add('hidden');
+            document.getElementById('show-summary-btn').classList.add('hidden');
+
+            document.getElementById('mode-badge').textContent = gameState.mode === 'AI'
+                ? `1P VS AI (${gameState.difficulty})`
+                : '2P LOCAL PVP';
+
+            beginSetupForPlayer(1);
+            logCombat(`New ${gameState.mode === 'AI' ? '1P vs AI' : '2P Local'} operation initialized.`, 'text-sky-300');
+        }
+
+        function beginSetupForPlayer(playerNum) {
+            gameState.phase = 'SETUP';
+            gameState.setupPlayer = playerNum;
+            gameState.selectedShipIndex = 0;
+            gameState.orientation = 'H';
+
+            document.getElementById('setup-dock').classList.remove('hidden');
+            document.getElementById('battle-dock').classList.add('hidden');
+            document.getElementById('cam-enemy').classList.add('hidden');
+            document.getElementById('cam-friendly').classList.add('hidden');
+
+            document.getElementById('setup-player-label').textContent = gameState.mode === 'AI'
+                ? 'YOUR FLEET DEPLOYMENT (PLAYER 1)'
+                : `PLAYER ${playerNum} FLEET DEPLOYMENT`;
+            document.getElementById('phase-status').textContent = `DEPLOYMENT PHASE // PLAYER ${playerNum}`;
+
+            sync3DSceneVisuals();
+            renderSetupRoster();
+            updateConfirmDeploymentButton();
+            setCameraView(playerNum === 1 ? 'FRIENDLY' : 'ENEMY');
+        }
+
+        function renderSetupRoster() {
+            const pState = gameState.players[gameState.setupPlayer];
+            const container = document.getElementById('ship-roster-list');
+            container.innerHTML = '';
+
+            SHIP_SPECS.forEach((spec, idx) => {
+                const placedShip = pState.ships.find(s => s.id === spec.id);
+                const isSelected = idx === gameState.selectedShipIndex;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `rounded-lg p-2 text-left border transition font-mono-tech ${
+                    isSelected
+                        ? 'bg-sky-500/25 border-sky-300 text-white'
+                        : placedShip
+                            ? 'bg-emerald-950/45 border-emerald-500/40 text-emerald-200'
+                            : 'bg-slate-900/70 border-slate-700/80 text-slate-300 hover:border-sky-400/50'
+                }`;
+
+                const pips = '■'.repeat(spec.length);
+                btn.innerHTML = `
+                    <div class="flex items-center justify-between text-[11px] font-bold">
+                        <span>${spec.name}</span>
+                        <span>${placedShip ? '✓' : spec.length}</span>
+                    </div>
+                    <div class="text-[10px] tracking-tighter mt-1 ${placedShip ? 'text-emerald-400' : 'text-sky-300'}">${pips}</div>
+                `;
+
+                btn.onclick = () => {
+                    sfx.playClick();
+                    if (placedShip) {
+                        removeShipFromPlayer(pState, spec.id);
+                        gameState.selectedShipIndex = idx;
+                        sync3DSceneVisuals();
+                        renderSetupRoster();
+                        updateConfirmDeploymentButton();
+                        updatePlacementPreview();
+                    } else {
+                        gameState.selectedShipIndex = idx;
+                        renderSetupRoster();
+                        updatePlacementPreview();
+                    }
+                };
+
+                container.appendChild(btn);
+            });
+        }
+
+        function rotateSelectedShip() {
+            sfx.playClick();
+            gameState.orientation = gameState.orientation === 'H' ? 'V' : 'H';
+            document.getElementById('orientation-label').textContent = gameState.orientation;
+            updatePlacementPreview();
+        }
+
+        function randomizeCurrentFleet() {
+            sfx.playClick();
+            const pState = gameState.players[gameState.setupPlayer];
+            randomizeFleet(pState);
+            sync3DSceneVisuals();
+            renderSetupRoster();
+            updateConfirmDeploymentButton();
+            updatePlacementPreview();
+            logCombat(`Player ${gameState.setupPlayer} fleet auto-deployed in formation.`, 'text-emerald-300');
+        }
+
+        function clearCurrentFleet() {
+            sfx.playClick();
+            const pState = gameState.players[gameState.setupPlayer];
+            pState.ships = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    pState.grid[r][c].shipId = null;
+                }
+            }
+            gameState.selectedShipIndex = 0;
+            sync3DSceneVisuals();
+            renderSetupRoster();
+            updateConfirmDeploymentButton();
+            updatePlacementPreview();
+        }
+
+        function updateConfirmDeploymentButton() {
+            const pState = gameState.players[gameState.setupPlayer];
+            const allPlaced = pState && pState.ships.length === SHIP_SPECS.length;
+            const btn = document.getElementById('confirm-deployment-btn');
+            btn.disabled = !allPlaced;
+            btn.textContent = allPlaced
+                ? (gameState.mode === 'PVP' && gameState.setupPlayer === 1 ? 'LOCK IN P1 & HANDOFF' : 'COMMENCE BATTLE')
+                : `DEPLOY ALL SHIPS (${pState ? pState.ships.length : 0}/${SHIP_SPECS.length})`;
+        }
+
+        function confirmDeployment() {
+            const pState = gameState.players[gameState.setupPlayer];
+            if (!pState || pState.ships.length < SHIP_SPECS.length) return;
+            sfx.playClick();
+            clearGroup(placementPreviewGroup);
+
+            if (gameState.mode === 'PVP' && gameState.setupPlayer === 1) {
+                triggerHandoff(
+                    'PASS TO PLAYER 2 FOR DEPLOYMENT',
+                    'Player 1 fleet is locked. Hand controls to Player 2 to position their strike group.',
+                    () => beginSetupForPlayer(2)
+                );
+            } else {
+                startBattlePhase();
+            }
+        }
+
+        function triggerHandoff(title, desc, onComplete) {
+            gameState.phase = 'HANDOFF';
+            gameState.pendingHandoffAction = onComplete;
+            document.getElementById('handoff-title').textContent = title;
+            document.getElementById('handoff-desc').textContent = desc;
+            document.getElementById('handoff-modal').classList.remove('hidden');
+            sync3DSceneVisuals();
+        }
+
+        function completeHandoff() {
+            sfx.playClick();
+            document.getElementById('handoff-modal').classList.add('hidden');
+            const action = gameState.pendingHandoffAction;
+            gameState.pendingHandoffAction = null;
+            if (typeof action === 'function') action();
+        }
+
+        function startBattlePhase() {
+            gameState.phase = 'BATTLE';
+            gameState.activePlayer = 1;
+            gameState.turnCount = 1;
+
+            document.getElementById('setup-dock').classList.add('hidden');
+            document.getElementById('battle-dock').classList.remove('hidden');
+            document.getElementById('cam-enemy').classList.remove('hidden');
+            document.getElementById('cam-friendly').classList.remove('hidden');
+
+            sync3DSceneVisuals();
+            updateBattleHUD();
+            setCameraView('TACTICAL');
+            showCallout('BATTLE STATIONS', 'SELECT HOSTILE COORDINATES TO FIRE', 'text-sky-300', 1800);
+            logCombat('All fleets on station. Hostilities commenced!', 'text-amber-300');
+        }
+
+        function handleGridCellClick(boardId, row, col) {
+            if (gameState.phase === 'SETUP') {
+                if (boardId !== gameState.setupPlayer) return;
+                const pState = gameState.players[gameState.setupPlayer];
+                const spec = SHIP_SPECS[gameState.selectedShipIndex];
+                if (!spec) return;
+
+                if (pState.ships.some(s => s.id === spec.id)) {
+                    removeShipFromPlayer(pState, spec.id);
+                }
+
+                if (placeShipOnPlayer(pState, spec, row, col, gameState.orientation)) {
+                    sfx.playClick();
+                    const nextIdx = SHIP_SPECS.findIndex(s => !pState.ships.some(ps => ps.id === s.id));
+                    if (nextIdx !== -1) gameState.selectedShipIndex = nextIdx;
+                    sync3DSceneVisuals();
+                    renderSetupRoster();
+                    updateConfirmDeploymentButton();
+                    updatePlacementPreview();
+                }
+                return;
+            }
+
+            if (gameState.phase === 'BATTLE') {
+                if (gameState.mode === 'AI' && gameState.activePlayer !== 1) return;
+                const expectedBoardId = gameState.activePlayer === 1 ? 2 : 1;
+                if (boardId !== expectedBoardId) {
+                    logCombat('Select a cell on the opposing strike zone to fire.', 'text-amber-300');
+                    return;
+                }
+
+                const defender = gameState.players[expectedBoardId];
+                const cell = defender.grid[row][col];
+                if (cell.hit || cell.miss) {
+                    logCombat(`Sector ${formatCoord(row, col)} already targeted. Choose another coordinate.`, 'text-slate-400');
+                    return;
+                }
+
+                executeSalvo(gameState.activePlayer, expectedBoardId, row, col);
+            }
+        }
+
+        function executeSalvo(attackerNum, defenderBoardId, row, col, elapsedTime = 0) {
+            const attacker = gameState.players[attackerNum];
+            const defender = gameState.players[defenderBoardId];
+            const cell = defender.grid[row][col];
+            if (cell.hit || cell.miss) return;
+
+            gameState.phase = 'FIRING';
+            attacker.shotsFired++;
+
+            const targetWorldPos = gridToWorld(defenderBoardId, row, col, 0.12);
+            const launchPos = getConcealedFiringOrigin(targetWorldPos);
+            const coordStr = formatCoord(row, col);
+
+            updateBattleHUD();
+
+            launchBallisticShell(launchPos, targetWorldPos, nowSec => {
+                const hitShip = cell.shipId ? defender.ships.find(s => s.id === cell.shipId) : null;
+                let sunkShip = null;
+
+                if (hitShip) {
+                    cell.hit = true;
+                    attacker.shotsHit++;
+                    hitShip.hits++;
+                    spawnExplosionVFX(targetWorldPos, nowSec, false);
+
+                    if (hitShip.hits >= hitShip.length) {
+                        hitShip.sunk = true;
+                        sunkShip = hitShip;
+                        sfx.playShipSunk();
+                        spawnExplosionVFX(targetWorldPos, nowSec, true);
+                        showCallout(`${hitShip.name} SUNK!`, `SECTOR ${coordStr} // FIRE AGAIN!`, 'text-rose-400', 1800);
+                        logCombat(`P${attackerNum} SUNK hostile ${hitShip.name} (${hitShip.hullCode}) at ${coordStr}! Bonus shot!`, 'text-rose-400 font-semibold');
+                    } else {
+                        showCallout('DIRECT HIT!', `SECTOR ${coordStr} // FIRE AGAIN!`, 'text-amber-300', 1400);
+                        logCombat(`P${attackerNum} scored a HIT at ${coordStr}! Bonus shot!`, 'text-amber-300');
+                    }
+                } else {
+                    cell.miss = true;
+                    spawnSplashVFX(targetWorldPos, nowSec, false);
+                    showCallout('SPLASH / MISS', `SECTOR ${coordStr}`, 'text-sky-200', 1200);
+                    logCombat(`P${attackerNum} fired at ${coordStr} — Miss.`, 'text-slate-300');
+                }
+
+                if (gameState.mode === 'AI' && attackerNum === 2) {
+                    updateAIMemory(row, col, Boolean(hitShip), sunkShip);
+                }
+
+                sync3DSceneVisuals();
+                updateBattleHUD();
+
+                const allSunk = defender.ships.every(s => s.sunk);
+                if (allSunk) {
+                    const p1Won = defenderBoardId === 2;
+                    const winTitle = gameState.mode === 'AI'
+                        ? (p1Won ? 'VICTORY' : 'DEFEAT')
+                        : `PLAYER ${attackerNum} WINS`;
+                    const winBadge = p1Won ? 'HOSTILE FLEET NEUTRALIZED' : 'ALLIED FLEET LOST';
+                    const winSub = p1Won
+                        ? 'All enemy warships have been destroyed.'
+                        : (gameState.mode === 'AI' ? 'The AI commander sank your strike group.' : `Player ${attackerNum} eliminated the opposing fleet.`);
+
+                    triggerFleetCollapseToSeabed(defenderBoardId, defender, winTitle, winBadge, winSub);
+                    return;
+                }
+
+                if (sunkShip) startShipSinking(sunkShip, defenderBoardId);
+
+                if (hitShip) {
+                    gameState.phase = 'BATTLE';
+                    updateBattleHUD();
+                    if (gameState.mode === 'AI' && gameState.activePlayer === 2) {
+                        setTimeout(() => {
+                            if (gameState.phase === 'BATTLE' && gameState.activePlayer === 2) {
+                                runAITurn();
+                            }
+                        }, 850);
+                    }
+                    return;
+                }
+
+                advanceTurnAfterMiss();
+            }, elapsedTime);
+        }
+
+        function advanceTurnAfterMiss() {
+            if (gameState.mode === 'AI') {
+                if (gameState.activePlayer === 1) {
+                    gameState.activePlayer = 2;
+                    gameState.phase = 'BATTLE';
+                    updateBattleHUD();
+                    setTimeout(() => {
+                        if (gameState.phase === 'BATTLE' && gameState.activePlayer === 2) {
+                            runAITurn();
+                        }
+                    }, 750);
+                } else {
+                    gameState.activePlayer = 1;
+                    gameState.turnCount++;
+                    gameState.phase = 'BATTLE';
+                    updateBattleHUD();
+                }
+            } else {
+                const nextPlayer = gameState.activePlayer === 1 ? 2 : 1;
+                if (nextPlayer === 1) gameState.turnCount++;
+                gameState.activePlayer = nextPlayer;
+                triggerHandoff(
+                    `PASS COMMAND TO PLAYER ${nextPlayer}`,
+                    `Turn ${gameState.turnCount} — Hand device to Player ${nextPlayer} to take their salvo.`,
+                    () => {
+                        gameState.phase = 'BATTLE';
+                        sync3DSceneVisuals();
+                        updateBattleHUD();
+                    }
+                );
+            }
+        }
+
+        // =========================================================================
+        // AI COMMANDER LOGIC (EASY / MEDIUM / HARD)
+        // =========================================================================
+        function updateAIMemory(row, col, isHit, sunkShip) {
+            const mem = gameState.aiMemory;
+            if (sunkShip) {
+                const sunkSet = new Set(sunkShip.cells.map(c => `${c.row},${c.col}`));
+                mem.hitStack = mem.hitStack.filter(pt => !sunkSet.has(`${pt.row},${pt.col}`));
+                mem.huntDirection = null;
+                return;
+            }
+            if (isHit) {
+                if (!mem.hitStack.some(pt => pt.row === row && pt.col === col)) {
+                    mem.hitStack.push({ row, col });
+                }
+            } else if (mem.hitStack.length >= 2 && mem.huntDirection) {
+                mem.huntDirection = null;
+            }
+        }
+
+        function runAITurn() {
+            if (gameState.phase !== 'BATTLE' || gameState.activePlayer !== 2) return;
+            const targetGrid = gameState.players[1].grid;
+            const chosen = chooseAITarget(targetGrid, gameState.difficulty);
+            if (!chosen) return;
+            executeSalvo(2, 1, chosen.row, chosen.col);
+        }
+
+        function chooseAITarget(grid, difficulty) {
+            const available = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (!grid[r][c].hit && !grid[r][c].miss) {
+                        available.push({ row: r, col: c });
+                    }
+                }
+            }
+            if (available.length === 0) return null;
+
+            if (difficulty === 'EASY') {
+                return available[Math.floor(Math.random() * available.length)];
+            }
+
+            const mem = gameState.aiMemory;
+            mem.hitStack = mem.hitStack.filter(pt => !grid[pt.row][pt.col].hit || grid[pt.row][pt.col].shipId !== null);
+
+            const activeHits = mem.hitStack.filter(pt => {
+                const shipId = grid[pt.row][pt.col].shipId;
+                const ship = gameState.players[1].ships.find(s => s.id === shipId);
+                return ship && !ship.sunk;
+            });
+
+            if (activeHits.length > 0) {
+                const candidates = [];
+                const dirs = [
+                    { dr: -1, dc: 0 },
+                    { dr: 1, dc: 0 },
+                    { dr: 0, dc: -1 },
+                    { dr: 0, dc: 1 }
+                ];
+
+                if (activeHits.length >= 2) {
+                    const h0 = activeHits[0];
+                    const h1 = activeHits[activeHits.length - 1];
+                    if (h0.row === h1.row) {
+                        const row = h0.row;
+                        const cols = activeHits.map(h => h.col);
+                        const minC = Math.min(...cols);
+                        const maxC = Math.max(...cols);
+                        if (minC - 1 >= 0 && !grid[row][minC - 1].hit && !grid[row][minC - 1].miss) {
+                            candidates.push({ row, col: minC - 1 });
+                        }
+                        if (maxC + 1 < GRID_SIZE && !grid[row][maxC + 1].hit && !grid[row][maxC + 1].miss) {
+                            candidates.push({ row, col: maxC + 1 });
+                        }
+                    } else if (h0.col === h1.col) {
+                        const col = h0.col;
+                        const rows = activeHits.map(h => h.row);
+                        const minR = Math.min(...rows);
+                        const maxR = Math.max(...rows);
+                        if (minR - 1 >= 0 && !grid[minR - 1][col].hit && !grid[minR - 1][col].miss) {
+                            candidates.push({ row: minR - 1, col });
+                        }
+                        if (maxR + 1 < GRID_SIZE && !grid[maxR + 1][col].hit && !grid[maxR + 1][col].miss) {
+                            candidates.push({ row: maxR + 1, col });
+                        }
+                    }
+                }
+
+                if (candidates.length === 0) {
+                    for (const h of activeHits) {
+                        for (const d of dirs) {
+                            const nr = h.row + d.dr;
+                            const nc = h.col + d.dc;
+                            if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+                                if (!grid[nr][nc].hit && !grid[nr][nc].miss) {
+                                    candidates.push({ row: nr, col: nc });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (candidates.length > 0) {
+                    return candidates[Math.floor(Math.random() * candidates.length)];
+                }
+            }
+
+            if (difficulty === 'HARD') {
+                const weights = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(1));
+                const remainingShips = gameState.players[1].ships.filter(s => !s.sunk);
+
+                for (const ship of remainingShips) {
+                    const len = ship.length;
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c <= GRID_SIZE - len; c++) {
+                            let valid = true;
+                            for (let k = 0; k < len; k++) {
+                                if (grid[r][c + k].miss) { valid = false; break; }
+                            }
+                            if (valid) {
+                                for (let k = 0; k < len; k++) weights[r][c + k] += 2;
+                            }
+                        }
+                    }
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        for (let r = 0; r <= GRID_SIZE - len; r++) {
+                            let valid = true;
+                            for (let k = 0; k < len; k++) {
+                                if (grid[r + k][c].miss) { valid = false; break; }
+                            }
+                            if (valid) {
+                                for (let k = 0; k < len; k++) weights[r + k][c] += 2;
+                            }
+                        }
+                    }
+                }
+
+                let bestScore = -1;
+                let bestCells = [];
+                for (const pt of available) {
+                    const parityBonus = ((pt.row + pt.col) % 2 === 0) ? 2 : 0;
+                    const score = weights[pt.row][pt.col] + parityBonus;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCells = [pt];
+                    } else if (score === bestScore) {
+                        bestCells.push(pt);
+                    }
+                }
+                return bestCells[Math.floor(Math.random() * bestCells.length)];
+            }
+
+            const parityCells = available.filter(pt => (pt.row + pt.col) % 2 === 0);
+            const pool = parityCells.length > 0 ? parityCells : available;
+            return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        // =========================================================================
+        // UI UPDATES & GAME OVER
+        // =========================================================================
+        function updateBattleHUD() {
+            const p1 = gameState.players[1];
+            const p2 = gameState.players[2];
+            if (!p1 || !p2) return;
+
+            const friendlyPlayer = gameState.mode === 'AI' ? p1 : gameState.players[gameState.activePlayer];
+            const enemyPlayer = gameState.mode === 'AI' ? p2 : gameState.players[gameState.activePlayer === 1 ? 2 : 1];
+
+            document.getElementById('friendly-fleet-title').textContent = gameState.mode === 'AI'
+                ? 'ALLIED TASK FORCE (P1)'
+                : `PLAYER ${friendlyPlayer.playerNum} FLEET`;
+            document.getElementById('enemy-fleet-title').textContent = gameState.mode === 'AI'
+                ? 'HOSTILE FLEET (AI)'
+                : `PLAYER ${enemyPlayer.playerNum} FLEET`;
+
+            const fAlive = friendlyPlayer.ships.filter(s => !s.sunk).length;
+            const eAlive = enemyPlayer.ships.filter(s => !s.sunk).length;
+
+            document.getElementById('friendly-remaining-count').textContent = `${fAlive}/${friendlyPlayer.ships.length} ACTIVE`;
+            document.getElementById('enemy-remaining-count').textContent = `${eAlive}/${enemyPlayer.ships.length} REMAINING`;
+
+            renderFleetStatusList('friendly-ships-status', friendlyPlayer.ships, true);
+            renderFleetStatusList('enemy-ships-status', enemyPlayer.ships, false);
+
+            const turnEl = document.getElementById('turn-indicator');
+            if (gameState.phase === 'GAMEOVER') {
+                turnEl.textContent = 'MISSION COMPLETE';
+                turnEl.className = 'text-emerald-300 font-bold';
+            } else if (gameState.phase === 'FIRING') {
+                turnEl.textContent = `TURN ${gameState.turnCount} // ORDNANCE IN FLIGHT...`;
+                turnEl.className = 'text-amber-300 font-semibold';
+            } else if (gameState.mode === 'AI') {
+                turnEl.textContent = gameState.activePlayer === 1
+                    ? `TURN ${gameState.turnCount} // YOUR SALVO`
+                    : `TURN ${gameState.turnCount} // AI COMMANDER TARGETING...`;
+                turnEl.className = gameState.activePlayer === 1 ? 'text-sky-300 font-bold' : 'text-rose-300 font-semibold';
+            } else {
+                turnEl.textContent = `TURN ${gameState.turnCount} // PLAYER ${gameState.activePlayer} SALVO`;
+                turnEl.className = 'text-sky-300 font-bold';
+            }
+        }
+
+        function renderFleetStatusList(elementId, ships, showDamage) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = '';
+            for (const s of ships) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = `flex items-center justify-between text-[11px] font-mono-tech px-1.5 py-0.5 rounded ${
+                    s.sunk ? 'bg-rose-950/50 text-rose-400 line-through opacity-75' : 'text-slate-200'
+                }`;
+                const pips = Array.from({ length: s.length }, (_, i) => {
+                    if (s.sunk) return '×';
+                    if (showDamage && i < s.hits) return '◆';
+                    return '■';
+                }).join('');
+                rowDiv.innerHTML = `<span>${s.name}</span><span class="${s.sunk ? 'text-rose-400' : 'text-sky-300'}">${pips}</span>`;
+                el.appendChild(rowDiv);
+            }
+        }
+
+        function finalizeGameOverModal() {
+            gameState.phase = 'GAMEOVER';
+            const payload = pendingGameOverPayload || {
+                title: 'MISSION COMPLETE',
+                badge: 'ENGAGEMENT ENDED',
+                subtitle: 'Combat operations concluded.'
+            };
+
+            const statsPlayer = gameState.mode === 'AI' ? gameState.players[1] : gameState.players[1];
+            const acc = statsPlayer.shotsFired > 0
+                ? Math.round((statsPlayer.shotsHit / statsPlayer.shotsFired) * 100)
+                : 0;
+            const rem = statsPlayer.ships.filter(s => !s.sunk).length;
+
+            document.getElementById('gameover-title').textContent = payload.title;
+            document.getElementById('gameover-badge').textContent = payload.badge;
+            document.getElementById('gameover-subtitle').textContent = payload.subtitle;
+            document.getElementById('stat-accuracy').textContent = `${acc}%`;
+            document.getElementById('stat-shots').textContent = `${statsPlayer.shotsFired}`;
+            document.getElementById('stat-remaining').textContent = `${rem}/${statsPlayer.ships.length}`;
+
+            document.getElementById('gameover-modal').classList.remove('hidden');
+            document.getElementById('show-summary-btn').classList.remove('hidden');
+            updateBattleHUD();
+        }
+
+        function inspectSunkenWrecks() {
+            sfx.playClick();
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('show-summary-btn').classList.remove('hidden');
+            animateCameraTo(new THREE.Vector3(0, -10.5, 24), new THREE.Vector3(0, -14.5, 0), 1.1);
+            logCombat('Free-roam wreck inspection active. Orbit or zoom to examine sunken hulls on seabed.', 'text-cyan-300');
+        }
+
+        function reopenGameOverModal() {
+            sfx.playClick();
+            document.getElementById('gameover-modal').classList.remove('hidden');
+        }
+
+        function showCallout(title, sub, colorClass = 'text-white', durationMs = 1500) {
+            const banner = document.getElementById('callout-banner');
+            const titleEl = document.getElementById('callout-title');
+            const subEl = document.getElementById('callout-sub');
+
+            titleEl.textContent = title;
+            titleEl.className = `font-display text-lg sm:text-2xl font-extrabold tracking-widest ${colorClass}`;
+            subEl.textContent = sub;
+
+            banner.style.opacity = '1';
+            banner.style.transform = 'translateY(0)';
+
+            clearTimeout(showCallout._timer);
+            showCallout._timer = setTimeout(() => {
+                banner.style.opacity = '0';
+                banner.style.transform = 'translateY(-8px)';
+            }, durationMs);
+        }
+
+        function logCombat(message, colorClass = 'text-slate-200') {
+            const logEl = document.getElementById('combat-log');
+            const entry = document.createElement('div');
+            entry.className = colorClass;
+            const t = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            entry.textContent = `[${t}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function formatCoord(row, col) {
+            return `${COL_LABELS[col] || '?'}${row + 1}`;
+        }
+
+        // =========================================================================
+        // CAMERA CONTROLS & UNDERWATER NAVIGATION
+        // =========================================================================
+        function setCameraView(mode) {
+            gameState.cameraMode = mode;
+            sfx.playClick();
+
+            ['TACTICAL', 'CINEMATIC', 'ENEMY', 'FRIENDLY'].forEach(m => {
+                const btn = document.getElementById('cam-' + m.toLowerCase());
+                if (btn) btn.classList.toggle('btn-active', m === mode);
+            });
+
+            let targetPos = new THREE.Vector3(0, 29, 31);
+            let targetLook = new THREE.Vector3(0, -1.0, 0);
+
+            if (mode === 'CINEMATIC') {
+                targetPos.set(0, 14.5, 36);
+                targetLook.set(0, 0.5, -1);
+            } else if (mode === 'ENEMY') {
+                const c = BOARD_CENTERS[2];
+                targetPos.set(c.x, 19.5, 19.5);
+                targetLook.set(c.x, 0, c.z);
+            } else if (mode === 'FRIENDLY') {
+                const c = BOARD_CENTERS[1];
+                targetPos.set(c.x, 19.5, 19.5);
+                targetLook.set(c.x, 0, c.z);
+            }
+
+            animateCameraTo(targetPos, targetLook, 0.85);
+        }
+
+        function toggleSubmergeCamera() {
+            sfx.playClick();
+            const currentWave = getOceanHeightAt(camera.position.x, camera.position.z, performance.now() * 0.001);
+            if (camera.position.y < currentWave - 0.3) {
+                const surfPos = new THREE.Vector3(camera.position.x, 15.0, Math.max(camera.position.z, 24.0));
+                const surfLook = new THREE.Vector3(0, -1.0, 0);
+                animateCameraTo(surfPos, surfLook, 0.9);
+            } else {
+                const divePos = new THREE.Vector3(0, -7.2, 23.0);
+                const diveLook = new THREE.Vector3(0, -8.5, 0);
+                animateCameraTo(divePos, diveLook, 0.9);
+            }
+        }
+
+        function animateCameraTo(pos, look, duration = 0.8) {
+            cameraAnim.active = true;
+            cameraAnim.targetPos.copy(pos);
+            cameraAnim.targetLook.copy(look);
+            cameraAnim.progress = 0;
+            cameraAnim.duration = duration;
+            cameraAnim.startPos = camera.position.clone();
+            cameraAnim.startLook = controls.target.clone();
+        }
+
+        function getOceanHeightAt(x, z, time) {
+            const swell = (WEATHER_PRESETS[gameState.weather] || WEATHER_PRESETS.CLEAR).swellScale;
+            const w1 = Math.sin(x * 0.18 + time * 1.35) * Math.cos(z * 0.16 + time * 1.1) * 0.24 * swell;
+            const w2 = Math.sin((x * 0.42 - z * 0.35) + time * 2.1) * 0.11 * swell;
+            const w3 = Math.cos((x * 0.85 + z * 0.9) - time * 2.8) * 0.045 * swell;
+            return w1 + w2 + w3;
+        }
+
+        function updateUnderwaterEnvironment(elapsed, dt) {
+            const minCamY = getSeabedHeightAt(camera.position.x, camera.position.z) + 1.2;
+            if (camera.position.y < minCamY) {
+                camera.position.y = minCamY;
+            }
+
+            const waveY = getOceanHeightAt(camera.position.x, camera.position.z, elapsed);
+            const submerged = camera.position.y < waveY;
+
+            if (submerged !== isCameraUnderwater) {
+                isCameraUnderwater = submerged;
+                const overlay = document.getElementById('underwater-overlay');
+                const subBtn = document.getElementById('cam-submerge');
+
+                if (submerged) {
+                    scene.background.setHex(0x032238);
+                    scene.fog.color.setHex(0x032238);
+                    scene.fog.density = 0.026;
+                    hemiLight.color.setHex(0x22d3ee);
+                    hemiLight.groundColor.setHex(0x02182b);
+                    sunLight.color.setHex(0x38bdf8);
+                    sunLight.intensity = 1.15;
+                    underwaterPointLight.intensity = 1.4;
+                    overlay.classList.add('active');
+                    if (subBtn) {
+                        subBtn.textContent = 'SURFACE CAM';
+                        subBtn.classList.add('btn-active');
+                    }
+                    sfx.setUnderwaterFilter(true);
+                } else {
+                    const preset = WEATHER_PRESETS[gameState.weather] || WEATHER_PRESETS.CLEAR;
+                    scene.background.setHex(preset.fogColor);
+                    scene.fog.color.setHex(preset.fogColor);
+                    scene.fog.density = preset.fogDensity;
+                    hemiLight.color.setHex(preset.hemiSky);
+                    hemiLight.groundColor.setHex(preset.hemiGround);
+                    sunLight.color.setHex(preset.sunColor);
+                    sunLight.intensity = preset.sunIntensity;
+                    underwaterPointLight.intensity = 0;
+                    overlay.classList.remove('active');
+                    if (subBtn) {
+                        subBtn.textContent = 'SUBMERGE CAM';
+                        subBtn.classList.remove('btn-active');
+                    }
+                    sfx.setUnderwaterFilter(false);
+                }
+            }
+
+            if (submerged) {
+                const depthMeters = Math.max(0.1, waveY - camera.position.y).toFixed(1);
+                const depthEl = document.getElementById('depth-value');
+                if (depthEl) depthEl.textContent = `DEPTH: -${depthMeters}m`;
+                underwaterPointLight.position.set(camera.position.x, camera.position.y + 1.5, camera.position.z);
+            }
+
+            for (const b of bubbleParticles) {
+                b.mesh.position.y += b.speed * dt;
+                b.mesh.position.x += Math.sin(elapsed * 2.2 + b.wobblePhase) * b.wobbleAmp * dt;
+                const surfAtBubble = getOceanHeightAt(b.mesh.position.x, b.mesh.position.z, elapsed) - 0.15;
+                if (b.mesh.position.y > surfAtBubble) {
+                    b.mesh.position.y = SEABED_BASE_Y + 0.5 + Math.random() * 2.0;
+                    b.mesh.position.x = (Math.random() - 0.5) * 68;
+                    b.mesh.position.z = (Math.random() - 0.5) * 48;
+                }
+            }
+        }
+
+        function toggleMute() {
+            gameState.muted = !gameState.muted;
+            document.getElementById('audio-toggle').textContent = gameState.muted ? 'SFX: OFF' : 'SFX: ON';
+            if (!gameState.muted) {
+                sfx.init();
+                sfx.setUnderwaterFilter(isCameraUnderwater);
+                sfx.playClick();
+            }
+        }
+
+        // =========================================================================
+        // INPUT HANDLERS & MAIN LOOP
+        // =========================================================================
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function onKeyDown(e) {
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                const active = document.activeElement;
+                const isTyping = active && (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable);
+                if (!isTyping) {
+                    e.preventDefault();
+                    cameraOrbitKeys.add(e.key);
+                    cameraAnim.active = false;
+                }
+                return;
+            }
+
+            if (e.key === 'r' || e.key === 'R') {
+                if (gameState.phase === 'SETUP') rotateSelectedShip();
+            } else if (e.key === '1') {
+                setCameraView('TACTICAL');
+            } else if (e.key === '2') {
+                setCameraView('CINEMATIC');
+            } else if (e.key === '3' && !document.getElementById('cam-enemy').classList.contains('hidden')) {
+                setCameraView('ENEMY');
+            } else if (e.key === '4' && !document.getElementById('cam-friendly').classList.contains('hidden')) {
+                setCameraView('FRIENDLY');
+            } else if (e.key === 'u' || e.key === 'U') {
+                toggleSubmergeCamera();
+            }
+        }
+
+        function onKeyUp(e) {
+            cameraOrbitKeys.delete(e.key);
+        }
+
+        function updateKeyboardCameraOrbit(dt) {
+            if (cameraOrbitKeys.size === 0 || !camera || !controls) return;
+            const horizontal = Number(cameraOrbitKeys.has('ArrowRight')) - Number(cameraOrbitKeys.has('ArrowLeft'));
+            const vertical = Number(cameraOrbitKeys.has('ArrowDown')) - Number(cameraOrbitKeys.has('ArrowUp'));
+            if (horizontal === 0 && vertical === 0) return;
+
+            const offset = camera.position.clone().sub(controls.target);
+            const spherical = new THREE.Spherical().setFromVector3(offset);
+            spherical.theta -= horizontal * dt * 1.35;
+            spherical.phi = THREE.MathUtils.clamp(
+                spherical.phi + vertical * dt * 1.1,
+                controls.minPolarAngle,
+                controls.maxPolarAngle
+            );
+            offset.setFromSpherical(spherical);
+            camera.position.copy(controls.target).add(offset);
+            camera.lookAt(controls.target);
+        }
+
+        function updatePointerCell(clientX, clientY) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const candidates = [...gridCellMeshes.friendly, ...gridCellMeshes.enemy];
+            const hits = raycaster.intersectObjects(candidates, false);
+
+            if (hits.length > 0) {
+                const data = hits[0].object.userData;
+                gameState.hoveredCell = { boardId: data.boardId, row: data.row, col: data.col };
+
+                const coordStr = formatCoord(data.row, data.col);
+                const ownerLabel = data.boardId === 1 ? 'P1' : 'P2';
+                document.getElementById('coord-readout').innerHTML = `CURSOR: <span class="text-sky-300">${ownerLabel}-${coordStr}</span>`;
+                document.getElementById('target-cursor-readout').innerHTML = `AIMING RETICLE: <span class="text-amber-300">${ownerLabel}-${coordStr}</span>`;
+
+                if (hoverReticleMesh) {
+                    const wp = gridToWorld(data.boardId, data.row, data.col, 0.12);
+                    hoverReticleMesh.position.copy(wp);
+                    hoverReticleMesh.visible = true;
+                }
+            } else {
+                gameState.hoveredCell = null;
+                if (hoverReticleMesh) hoverReticleMesh.visible = false;
+            }
+
+            updatePlacementPreview();
+        }
+
+        function onPointerMove(e) {
+            updatePointerCell(e.clientX, e.clientY);
+        }
+
+        function onPointerDown(e) {
+            if (e.button !== 0) return;
+            pointerGesture = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is optional */ }
+        }
+
+        function onPointerUp(e) {
+            if (e.button !== 0 || !pointerGesture || pointerGesture.pointerId !== e.pointerId) return;
+            const gesture = pointerGesture;
+            pointerGesture = null;
+            if (Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 7) return;
+
+            updatePointerCell(e.clientX, e.clientY);
+            if (!gameState.hoveredCell) return;
+            const { boardId, row, col } = gameState.hoveredCell;
+            handleGridCellClick(boardId, row, col);
+        }
+
+        let lastFrameTime = performance.now();
+        const startTime = lastFrameTime;
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(0.05, (now - lastFrameTime) * 0.001);
+            const elapsed = (now - startTime) * 0.001;
+            lastFrameTime = now;
+
+            if (oceanUniforms) oceanUniforms.uTime.value = elapsed;
+            if (seabedUniforms) seabedUniforms.uTime.value = elapsed;
+            updateUnderwaterEnvironment(elapsed, dt);
+            updateWeatherEffects(elapsed, dt);
+
+            for (let pNum = 1; pNum <= 2; pNum++) {
+                const pState = gameState.players[pNum];
+                if (!pState) continue;
+                for (const ship of pState.ships) {
+                    const isSinking = sinkingShips.some(s => s.ship === ship);
+                    if (ship.mesh && !ship.sunk && !isSinking) {
+                        const phase = ship.mesh.userData.bobPhase || 0;
+                        ship.mesh.position.y = Math.sin(elapsed * 1.6 + phase) * 0.055;
+                        ship.mesh.rotation.z = Math.sin(elapsed * 1.25 + phase) * 0.022;
+                        ship.mesh.rotation.x = Math.cos(elapsed * 1.1 + phase) * 0.018;
+                    }
+                }
+            }
+
+            updateSinkingShips(dt);
+
+            for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+                const proj = activeProjectiles[i];
+                proj.progress += dt / proj.duration;
+                const t = Math.min(1, proj.progress);
+
+                const pos = new THREE.Vector3().lerpVectors(proj.start, proj.target, t);
+                pos.y += Math.sin(t * Math.PI) * proj.arcHeight;
+                proj.mesh.position.copy(pos);
+
+                const trailT = Math.max(0, t - 0.06);
+                const trailPos = new THREE.Vector3().lerpVectors(proj.start, proj.target, trailT);
+                trailPos.y += Math.sin(trailT * Math.PI) * proj.arcHeight;
+                proj.trail.position.copy(trailPos);
+
+                if (t >= 1) {
+                    projectilesGroup.remove(proj.mesh);
+                    projectilesGroup.remove(proj.trail);
+                    activeProjectiles.splice(i, 1);
+                    if (typeof proj.onImpact === 'function') {
+                        proj.onImpact(elapsed);
+                    }
+                }
+            }
+
+            for (let i = activeEffects.length - 1; i >= 0; i--) {
+                const fx = activeEffects[i];
+                fx.age += dt;
+                if (fx.age < 0) continue;
+
+                if (fx.age >= fx.maxAge) {
+                    effectsGroup.remove(fx.mesh);
+                    activeEffects.splice(i, 1);
+                    continue;
+                }
+
+                const ratio = fx.age / fx.maxAge;
+                if (fx.type === 'ring') {
+                    const s = 1 + ratio * fx.maxScale;
+                    fx.mesh.scale.set(s, s, 1);
+                    fx.mesh.material.opacity = Math.max(0, (1 - ratio) * 0.8);
+                } else if (fx.type === 'flash') {
+                    const s = 1 + Math.sin(ratio * Math.PI) * fx.maxScale;
+                    fx.mesh.scale.setScalar(s);
+                    fx.mesh.material.opacity = Math.max(0, 1 - ratio);
+                } else if (fx.type === 'particle') {
+                    fx.vel.y -= fx.gravity * dt;
+                    fx.mesh.position.addScaledVector(fx.vel, dt);
+                    fx.mesh.rotation.x += 5 * dt;
+                    fx.mesh.rotation.y += 4 * dt;
+                    fx.mesh.scale.setScalar(Math.max(0.1, 1 - ratio * 0.75));
+                    fx.mesh.material.opacity = Math.max(0, 1 - ratio);
+                } else if (fx.type === 'smoke') {
+                    fx.mesh.position.addScaledVector(fx.vel, dt);
+                    fx.mesh.scale.setScalar(1 + ratio * 1.9);
+                    fx.mesh.material.opacity = Math.max(0, (1 - ratio) * 0.45);
+                } else if (fx.type === 'bubble' || fx.type === 'silt') {
+                    fx.mesh.position.addScaledVector(fx.vel, dt);
+                    fx.mesh.scale.setScalar(fx.type === 'silt' ? (1 + ratio * 2.2) : Math.max(0.2, 1 - ratio * 0.5));
+                    fx.mesh.material.opacity = Math.max(0, (1 - ratio) * 0.65);
+                }
+            }
+
+            for (const em of damageEmitters) {
+                em.timer -= dt;
+                if (em.timer <= 0) {
+                    em.timer = em.sunk ? 0.14 : 0.28;
+                    spawnDamageSmoke(em.pos, em.sunk);
+                }
+            }
+
+            if (cameraAnim.active) {
+                cameraAnim.progress += dt / cameraAnim.duration;
+                const p = Math.min(1, cameraAnim.progress);
+                const ease = 1 - Math.pow(1 - p, 3);
+                camera.position.lerpVectors(cameraAnim.startPos, cameraAnim.targetPos, ease);
+                controls.target.lerpVectors(cameraAnim.startLook, cameraAnim.targetLook, ease);
+                if (p >= 1) {
+                    cameraAnim.active = false;
+                }
+            }
+
+            if (hoverReticleMesh && hoverReticleMesh.visible) {
+                const pulse = 1 + Math.sin(elapsed * 6) * 0.08;
+                hoverReticleMesh.scale.set(pulse, pulse, 1);
+            }
+
+            updateKeyboardCameraOrbit(dt);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('load', () => {
+            initThreeScene();
+            lastFrameTime = performance.now();
+            animate(lastFrameTime);
+        });
+    </script>
+</body>
+</html>
