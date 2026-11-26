@@ -11,16 +11,16 @@
   <link rel="stylesheet" href="tower-defence.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body>
+<body data-game-id="tower-defence">
   <main class="game-shell">
     <header class="game-header">
-      <a class="brand" href="../index.html"><span class="brand-mark">K</span><span>KOOPS GAMES <small>TOWER DEFENCE 3D</small></span></a>
+      <a class="brand" href="../../index.html"><span class="brand-mark">K</span><span>KOOPS GAMES <small>TOWER DEFENCE 3D</small></span></a>
       <div class="resource-bar" aria-live="polite">
         <div class="resource health-resource"><span class="resource-icon">♥</span><span><small>CORE HEALTH</small><strong id="health-value">25 / 25</strong></span><div class="health-track"><i id="health-fill"></i></div></div>
         <div class="resource"><span class="resource-icon cash-icon">¢</span><span><small>CASH</small><strong id="cash-value">420</strong></span></div>
         <div class="resource wave-resource"><span class="resource-icon wave-icon">⌁</span><span><small>WAVE</small><strong id="wave-value">Ready</strong></span></div>
       </div>
-      <div class="header-actions"><button class="theme-toggle" type="button">☼ Light mode</button><a href="../index.html" class="hub-link">← Game Hub</a></div>
+      <div class="header-actions"><button class="theme-toggle" type="button">☼ Light mode</button><a href="../../index.html" class="hub-link">← Game Hub</a></div>
     </header>
 
     <section class="battle-heading">
@@ -66,15 +66,16 @@
         <button class="map-choice" data-map="clifftop" type="button"><span class="map-preview preview-clifftop"><i></i></span><strong>Clifftop Run</strong><small>Tight turns · quick response</small></button>
       </div>
       <button id="begin-btn" class="begin-btn" type="button">Deploy to Harbour Hold <span>→</span></button>
-      <a class="back-to-hub" href="../index.html">← Back to the game hub</a>
+      <a class="back-to-hub" href="../../index.html">← Back to the game hub</a>
     </div>
   </section>
 
   <section id="gameover-screen" class="overlay-screen hidden" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
-    <div class="setup-card gameover-card"><p class="eyebrow">CORE OFFLINE</p><h2 id="gameover-title">The line has<br><em>been overrun.</em></h2><p id="gameover-copy">Your defence held for 0 waves. Regroup and try a new strategy.</p><button id="retry-btn" class="begin-btn" type="button">Try again <span>↻</span></button><a class="back-to-hub" href="../index.html">← Return to the game hub</a></div>
+    <div class="setup-card gameover-card"><p class="eyebrow">CORE OFFLINE</p><h2 id="gameover-title">The line has<br><em>been overrun.</em></h2><p id="gameover-copy">Your defence held for 0 waves. Regroup and try a new strategy.</p><button id="retry-btn" class="begin-btn" type="button">Try again <span>↻</span></button><a class="back-to-hub" href="../../index.html">← Return to the game hub</a></div>
   </section>
 
   <script src="../theme.js"></script>
   <script src="tower-defence.js"></script>
+  <script type="module" src="../../account-activity.js"></script>
 </body>
 </html>

@@ -11,12 +11,12 @@
   <link rel="stylesheet" href="snooker.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body>
+<body data-game-id="snooker">
   <canvas id="snooker-canvas" aria-label="Interactive 3D snooker table. Aim by moving the pointer over the table."></canvas>
 
   <header class="topbar">
-    <a href="../index.html" class="brand"><span class="brand-mark">K</span><span>KOOPS GAMES <small>SNOOKER 3D</small></span></a>
-    <div class="top-actions"><button class="quiet-btn theme-toggle" type="button">☼ Light mode</button><button id="rules-btn" class="quiet-btn" type="button">Rules</button><a class="quiet-btn hub-link" href="../index.html">← Game Hub</a></div>
+    <a href="../../index.html" class="brand"><span class="brand-mark">K</span><span>KOOPS GAMES <small>SNOOKER 3D</small></span></a>
+    <div class="top-actions"><button class="quiet-btn theme-toggle" type="button">☼ Light mode</button><button id="rules-btn" class="quiet-btn" type="button">Rules</button><a class="quiet-btn hub-link" href="../../index.html">← Game Hub</a></div>
   </header>
 
   <section id="scoreboard" class="scoreboard hidden" aria-live="polite">
@@ -52,7 +52,7 @@
         <label class="frame-select">MATCH LENGTH<select id="best-of"><option value="1">One frame</option><option value="3" selected>Best of 3</option><option value="5">Best of 5</option></select></label>
       </div>
       <button id="start-game-btn" class="start-btn" type="button">Start a frame <span>→</span></button>
-      <a href="../index.html" class="back-link">← Back to the Koops Games hub</a>
+      <a href="../../index.html" class="back-link">← Back to the Koops Games hub</a>
     </div>
   </section>
 
@@ -68,15 +68,16 @@
         <h3>Frame tie and concession</h3><p>If scores are level after the black, the black is re-spotted. The next pot or foul decides the frame. A player may concede a frame. A match is played to the selected best-of length.</p>
         <h3>Controls</h3><p>Move the pointer across the table to aim. Use the power slider and select Take Shot. After a scratch, click inside the D to place the cue ball. Press Space to shoot.</p>
       </div>
-      <a href="../index.html" class="back-link">← Return to Game Hub</a>
+      <a href="../../index.html" class="back-link">← Return to Game Hub</a>
     </div>
   </section>
 
   <section id="result-screen" class="screen-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
-    <div class="result-card"><div class="setup-kicker">FRAME COMPLETE</div><h2 id="result-title">Frame winner</h2><p id="result-copy"></p><div class="result-actions"><button id="next-frame-btn" class="start-btn" type="button">Next frame →</button><a href="../index.html" class="hub-result-link">Return to Game Hub</a></div></div>
+    <div class="result-card"><div class="setup-kicker">FRAME COMPLETE</div><h2 id="result-title">Frame winner</h2><p id="result-copy"></p><div class="result-actions"><button id="next-frame-btn" class="start-btn" type="button">Next frame →</button><a href="../../index.html" class="hub-result-link">Return to Game Hub</a></div></div>
   </section>
 
   <script src="../theme.js"></script>
   <script src="snooker.js"></script>
+  <script type="module" src="../../account-activity.js"></script>
 </body>
 </html>

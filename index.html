@@ -14,36 +14,71 @@
   <main class="hub-shell">
     <header class="hub-header">
       <a class="brand" href="index.html" aria-label="Koops Games home"><span class="brand-mark">K</span><span>KOOPS GAMES <small>GAME HUB</small></span></a>
-      <div class="hub-status"><span><i></i> Choose a game</span><button class="theme-toggle" type="button">☼ Light mode</button></div>
+      <div class="hub-status"><span><i></i> Choose a game</span><a class="account-hub-link" href="account.html">Player accounts</a><button class="theme-toggle" type="button">☼ Light mode</button></div>
     </header>
 
     <section class="welcome">
       <p class="eyebrow">YOUR GAME ROOM</p>
       <h1>Pick a table.<br><span>Make a day of it.</span></h1>
-      <p class="intro">Choose a game to jump straight in. Build on the BCP coast, play snooker, defend the realm, or take command of a fleet.</p>
+      <p class="intro">Choose a game to jump straight in. Explore strategy, classic board games, puzzles and cue sports.</p>
     </section>
 
-    <section class="game-grid" aria-label="Available games">
-      <a class="game-card monopoly-card" href="Monopoly/monopoly.html">
-        <div class="card-art monopoly-art" aria-hidden="true"><div class="monopoly-board"><span>GO</span><i></i><b>£</b></div><div class="art-glow"></div></div>
-        <div class="card-copy"><div class="card-label"><span>STRATEGY · 2–4 PLAYERS</span><span class="play-mark">↗</span></div><h2>BCP Monopoly 3D</h2><p>Buy local landmarks, build your property sets and outlast the other players.</p><span class="card-cta">Play Monopoly <b>→</b></span></div>
-      </a>
+    <nav class="category-nav" aria-label="Game categories">
+      <a href="#strategy">Strategy</a>
+      <a href="#board-puzzle">Board &amp; Puzzle</a>
+      <a href="#cue-sports">Cue Sports</a>
+    </nav>
 
-      <a class="game-card snooker-card" href="snooker/index.html">
-        <div class="card-art snooker-art" aria-hidden="true"><div class="snooker-table"><span class="ball red"></span><span class="ball yellow"></span><span class="ball blue"></span><span class="ball white"></span><i class="pocket p1"></i><i class="pocket p2"></i><i class="pocket p3"></i><i class="pocket p4"></i></div><div class="art-glow"></div></div>
-        <div class="card-copy"><div class="card-label"><span>CUE SPORTS · 2 PLAYERS</span><span class="play-mark">↗</span></div><h2>Koops Games Snooker</h2><p>Take your shot, build a break and play through a full frame by the rules.</p><span class="card-cta">Play Snooker <b>→</b></span></div>
-      </a>
+    <section id="strategy" class="game-section" aria-labelledby="strategy-title">
+      <header class="section-heading"><div><p class="eyebrow">PLAN YOUR NEXT MOVE</p><h2 id="strategy-title">Strategy &amp; Tactics</h2></div><span>3 GAMES</span></header>
+      <div class="game-grid" aria-label="Strategy games">
+        <a class="game-card monopoly-card" href="Default%20Games/Monopoly/monopoly.html">
+          <div class="card-art monopoly-art" aria-hidden="true"><div class="monopoly-board"><span>GO</span><i></i><b>£</b></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>STRATEGY · 2–4 PLAYERS</span><span class="play-mark">↗</span></div><h2>BCP Monopoly 3D</h2><p>Buy local landmarks, build your property sets and outlast the other players.</p><span class="card-cta">Play Monopoly <b>→</b></span></div>
+        </a>
 
-      <a class="game-card defence-card" href="tower-defence/index.html">
-        <div class="card-art defence-art" aria-hidden="true"><div class="defence-map"><i class="route"></i><b class="td-tower tower-a"></b><b class="td-tower tower-b"></b><span class="td-enemy"></span><span class="td-core">◆</span></div><div class="art-glow"></div></div>
-        <div class="card-copy"><div class="card-label"><span>STRATEGY · SOLO</span><span class="play-mark">↗</span></div><h2>Koops Games Tower Defence 3D</h2><p>Build a defence, upgrade your towers and hold the line through each enemy wave.</p><span class="card-cta">Play Tower Defence <b>→</b></span></div>
-      </a>
+        <a class="game-card defence-card" href="Default%20Games/tower-defence/index.html">
+          <div class="card-art defence-art" aria-hidden="true"><div class="defence-map"><i class="route"></i><b class="td-tower tower-a"></b><b class="td-tower tower-b"></b><span class="td-enemy"></span><span class="td-core">◆</span></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>STRATEGY · SOLO</span><span class="play-mark">↗</span></div><h2>Tower Defence 3D</h2><p>Build a defence, upgrade your towers and hold the line through each enemy wave.</p><span class="card-cta">Play Tower Defence <b>→</b></span></div>
+        </a>
 
-      <a class="game-card battleships-card" href="Battleships/battleships.html">
-        <div class="card-art battleships-art" aria-hidden="true"><div class="naval-board"><i class="naval-ship naval-ship-long"></i><i class="naval-ship naval-ship-mid"></i><i class="naval-ship naval-ship-short"></i><span class="naval-radar"></span><b class="naval-hit">×</b><b class="naval-miss">•</b></div><div class="art-glow"></div></div>
-        <div class="card-copy"><div class="card-label"><span>STRATEGY · NAVAL BATTLE</span><span class="play-mark">↗</span></div><h2>Koops Games Battleships</h2><p>Take command of a fleet, plan your shots and battle across the hidden grid.</p><span class="card-cta">Play Battleships <b>→</b></span></div>
-      </a>
+        <a class="game-card battleships-card" href="Default%20Games/Battleships/battleships.html">
+          <div class="card-art battleships-art" aria-hidden="true"><div class="naval-board"><i class="naval-ship naval-ship-long"></i><i class="naval-ship naval-ship-mid"></i><i class="naval-ship naval-ship-short"></i><span class="naval-radar"></span><b class="naval-hit">×</b><b class="naval-miss">•</b></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>STRATEGY · NAVAL BATTLE</span><span class="play-mark">↗</span></div><h2>Battleships</h2><p>Take command of a fleet, plan your shots and battle across the hidden grid.</p><span class="card-cta">Play Battleships <b>→</b></span></div>
+        </a>
+      </div>
     </section>
+
+    <section id="board-puzzle" class="game-section" aria-labelledby="board-puzzle-title">
+      <header class="section-heading"><div><p class="eyebrow">CLASSIC GAMES, NEW TABLE</p><h2 id="board-puzzle-title">Board &amp; Puzzle</h2></div><span>3 GAMES</span></header>
+      <div class="game-grid" aria-label="Board and puzzle games">
+        <a class="game-card chess-card" href="Default%20Games/Chess/chess.html">
+          <div class="card-art chess-art" aria-hidden="true"><div class="chess-preview"><span>♜</span><b>♞</b><i>♟</i><em>♛</em></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>BOARD GAME · SOLO OR 2 PLAYER</span><span class="play-mark">↗</span></div><h2>3D Chess</h2><p>Play a friend or challenge Stockfish at one of three strengths.</p><span class="card-cta">Play Chess <b>→</b></span></div>
+        </a>
+
+        <a class="game-card connect4-card" href="Default%20Games/Connect%204/Connect4.html">
+          <div class="card-art connect4-art" aria-hidden="true"><div class="connect4-board"><span class="red-token"></span><span class="gold-token"></span><span class="red-token"></span><span class="gold-token"></span><span class="red-token"></span></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>QUICK PLAY · SOLO OR 2 PLAYERS</span><span class="play-mark">↗</span></div><h2>Connect 4</h2><p>Take on an AI bot or a friend; connect four counters to win.</p><span class="card-cta">Play Connect 4 <b>→</b></span></div>
+        </a>
+
+        <a class="game-card minesweeper-card" href="Default%20Games/Minesweeper/minesweeper.html">
+          <div class="card-art minesweeper-art" aria-hidden="true"><div class="mines-grid"><span>1</span><span></span><span>2</span><span>⚑</span><span></span><span>2</span><span>✹</span><span>1</span><span></span><span>1</span><span>2</span><span>✹</span><span>1</span><span></span><span>1</span><span></span></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>PUZZLE · SOLO</span><span class="play-mark">↗</span></div><h2>Minesweeper</h2><p>Read the number clues, mark the mines and reveal every safe tile.</p><span class="card-cta">Play Minesweeper <b>→</b></span></div>
+        </a>
+      </div>
+    </section>
+
+    <section id="cue-sports" class="game-section" aria-labelledby="cue-sports-title">
+      <header class="section-heading"><div><p class="eyebrow">TAKE YOUR SHOT</p><h2 id="cue-sports-title">Cue Sports</h2></div><span>1 GAME</span></header>
+      <div class="game-grid" aria-label="Cue sports games">
+        <a class="game-card snooker-card" href="Default%20Games/snooker/index.html">
+          <div class="card-art snooker-art" aria-hidden="true"><div class="snooker-table"><span class="ball red"></span><span class="ball yellow"></span><span class="ball blue"></span><span class="ball white"></span><i class="pocket p1"></i><i class="pocket p2"></i><i class="pocket p3"></i><i class="pocket p4"></i></div><div class="art-glow"></div></div>
+          <div class="card-copy"><div class="card-label"><span>CUE SPORTS · 2 PLAYERS</span><span class="play-mark">↗</span></div><h2>3D Snooker</h2><p>Take your shot, build a break and play through a full frame by the rules.</p><span class="card-cta">Play Snooker <b>→</b></span></div>
+        </a>
+      </div>
+    </section>
+
     <footer class="hub-footer"><span>KOOPS GAMES</span><span>More games coming to the table</span></footer>
   </main>
   <script src="theme.js"></script>

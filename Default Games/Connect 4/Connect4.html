@@ -1,0 +1,3380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connect 4 — 3D Tabletop Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Custom styling for full-viewport 3D canvas and smooth tactile HUD polish */
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0b0f17;
+      color: #f8fafc;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      touch-action: none;
+    }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hud-panel {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    }
+
+    .hud-btn {
+      transition: transform 0.14s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .hud-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .hud-btn:active:not(:disabled) {
+      transform: translateY(0px) scale(0.98);
+    }
+
+    .hud-btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    @keyframes popIn {
+      0% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.95);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .animate-pop-in {
+      animation: popIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes modalOut {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.96);
+      }
+    }
+
+    .animate-modal-out {
+      animation: modalOut 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+
+    /* Smooth screen transition veil for starting / advancing games */
+    #transition-veil {
+      transition: opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1), backdrop-filter 0.34s ease;
+    }
+
+    /* Main menu backdrop & smooth entrance/exit states */
+    #main-menu-overlay {
+      background: radial-gradient(circle at 50% 35%, rgba(15, 23, 42, 0.22) 0%, rgba(2, 6, 23, 0.68) 100%);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    #main-menu-overlay.menu-hidden {
+      opacity: 0;
+      transform: scale(1.02);
+      pointer-events: none;
+    }
+
+    @keyframes floatSlow {
+      0%, 100% {
+        transform: translateY(0px);
+      }
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    .animate-float-slow {
+      animation: floatSlow 4.2s ease-in-out infinite;
+    }
+
+    /* Custom subtle scrollbar for narrow mobile HUD bars */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body data-game-id="connect4">
+  <!-- Fullscreen 3D Viewport -->
+  <div id="canvas-container" aria-label="3D Connect 4 Game Board"></div>
+
+  <!-- Interactive Main Menu Overlay -->
+  <section
+    id="main-menu-overlay"
+    class="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+    aria-label="Connect 4 Main Menu"
+  >
+    <div class="hud-panel animate-float-slow w-full max-w-2xl rounded-3xl p-5 sm:p-8 border border-white/15 relative overflow-hidden">
+      <!-- Subtle decorative accent glow -->
+      <div class="pointer-events-none -top-24 -right-24 w-64 h-64 rounded-full bg-rose-500/15 blur-3xl absolute"></div>
+      <div class="pointer-events-none -bottom-24 -left-24 w-64 h-64 rounded-full bg-amber-400/15 blur-3xl absolute"></div>
+
+      <div class="relative z-10">
+        <!-- Top Title Row -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-medium text-slate-200">
+            <span class="flex -space-x-1.5">
+              <span class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 ring-1 ring-white/30"></span>
+              <span class="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 ring-1 ring-white/30"></span>
+            </span>
+            <span>3D Tabletop Edition</span>
+          </div>
+
+          <button
+            id="menu-sound-btn"
+            type="button"
+            class="hud-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 flex items-center gap-1.5"
+          >
+            <span id="menu-sound-label">Sound: On</span>
+          </button>
+          <a href="../../index.html" class="hud-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 no-underline">Game Hub</a>
+        </div>
+
+        <!-- Hero Heading -->
+        <div class="mb-6">
+          <h1 class="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-tight">
+            Connect <span class="bg-gradient-to-r from-rose-400 via-amber-300 to-amber-400 bg-clip-text text-transparent">Four</span>
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-xl">
+            Drop weighted discs into a physical walnut &amp; brushed-metal rack. Outsmart adaptive AI bots or challenge a friend on the same screen.
+          </p>
+        </div>
+
+        <!-- Quick Configuration Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <!-- Mode Card -->
+          <div class="bg-slate-950/55 border border-white/10 rounded-2xl p-3.5">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Play Mode</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button
+                id="menu-mode-bot"
+                type="button"
+                class="hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm"
+              >
+                vs. Bot
+              </button>
+              <button
+                id="menu-mode-local"
+                type="button"
+                class="hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10"
+              >
+                2 Players
+              </button>
+            </div>
+          </div>
+
+          <!-- Bot Skill Card -->
+          <div id="menu-diff-card" class="bg-slate-950/55 border border-white/10 rounded-2xl p-3.5">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Bot Skill</div>
+            <div class="grid grid-cols-3 gap-1">
+              <button
+                data-menu-diff="casual"
+                type="button"
+                class="menu-diff-btn hud-btn py-2 px-1.5 rounded-xl text-[11px] font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10"
+              >
+                Casual
+              </button>
+              <button
+                data-menu-diff="smart"
+                type="button"
+                class="menu-diff-btn hud-btn py-2 px-1.5 rounded-xl text-[11px] font-semibold bg-amber-500/90 text-slate-950"
+              >
+                Smart
+              </button>
+              <button
+                data-menu-diff="tactical"
+                type="button"
+                class="menu-diff-btn hud-btn py-2 px-1.5 rounded-xl text-[11px] font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10"
+              >
+                Tactical
+              </button>
+            </div>
+          </div>
+
+          <!-- Atmosphere Card -->
+          <div class="bg-slate-950/55 border border-white/10 rounded-2xl p-3.5">
+            <label for="menu-atmosphere-select" class="block text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              Atmosphere
+            </label>
+            <select
+              id="menu-atmosphere-select"
+              class="w-full bg-slate-900/90 text-slate-100 text-xs font-medium rounded-xl px-3 py-2 border border-white/15 focus:outline-none focus:border-amber-400/60 cursor-pointer"
+            >
+              <option value="midnight">Midnight Lounge</option>
+              <option value="sunset">Golden Sunset</option>
+              <option value="arcade">Neon Arcade</option>
+              <option value="nordic">Nordic Dawn</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Primary Launch Actions -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <button
+            id="menu-start-btn"
+            type="button"
+            class="hud-btn flex-1 py-3.5 px-6 rounded-2xl text-sm sm:text-base font-bold bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-300 hover:to-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+          >
+            <span>Start Match</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </button>
+
+          <button
+            id="menu-quick-bot-btn"
+            type="button"
+            class="hud-btn py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/15 text-slate-100 border border-white/15"
+          >
+            Quick Duel (Tactical Bot)
+          </button>
+        </div>
+
+        <!-- Compact Controls & Rules Strip -->
+        <div class="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+          <span>Connect 4 horizontally, vertically, or diagonally to win</span>
+          <span>Click/Tap columns or keys <strong class="text-slate-200">1–7</strong> • Drag to orbit</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Top HUD Bar -->
+  <header id="game-hud-header" class="fixed top-0 left-0 right-0 z-20 p-3 sm:p-4 pointer-events-none hidden">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+      <!-- Brand + Mode & Difficulty Controls -->
+      <div class="hud-panel rounded-2xl px-3 py-2 flex flex-wrap items-center gap-2 sm:gap-3 pointer-events-auto">
+        <div class="flex items-center gap-2 pr-1">
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-gradient-to-br from-rose-500 to-amber-400 text-slate-950 font-bold text-xs shadow-md">
+            C4
+          </span>
+          <span class="font-semibold text-sm sm:text-base tracking-tight text-white">Connect 4</span>
+          <span class="hidden md:inline-block text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-medium">
+            3D Studio
+          </span>
+        </div>
+
+        <div class="h-5 w-px bg-white/10 hidden sm:block"></div>
+
+        <!-- Mode Toggle -->
+        <div class="flex items-center bg-slate-950/60 p-1 rounded-xl border border-white/10" role="group" aria-label="Game Mode">
+          <button
+            id="mode-bot-btn"
+            type="button"
+            class="hud-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500 text-white shadow-sm"
+          >
+            vs. Bot
+          </button>
+          <button
+            id="mode-local-btn"
+            type="button"
+            class="hud-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white"
+          >
+            2 Players
+          </button>
+        </div>
+
+        <!-- Bot Difficulty Selector -->
+        <div id="difficulty-group" class="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-white/10" role="group" aria-label="Bot Difficulty">
+          <button
+            data-diff="casual"
+            type="button"
+            class="diff-btn hud-btn px-2 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white"
+          >
+            Casual
+          </button>
+          <button
+            data-diff="smart"
+            type="button"
+            class="diff-btn hud-btn px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/90 text-slate-950 font-semibold"
+          >
+            Smart
+          </button>
+          <button
+            data-diff="tactical"
+            type="button"
+            class="diff-btn hud-btn px-2 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white"
+          >
+            Tactical
+          </button>
+        </div>
+
+        <!-- Starter Preference -->
+        <div class="flex items-center gap-1.5 bg-slate-950/60 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
+          <label for="starter-select" class="text-slate-400 hidden lg:inline">First:</label>
+          <select
+            id="starter-select"
+            class="bg-transparent text-slate-100 font-medium focus:outline-none cursor-pointer"
+            aria-label="Who goes first"
+          >
+            <option value="1" class="bg-slate-900 text-white">Red (P1)</option>
+            <option value="2" class="bg-slate-900 text-white">Gold (P2/Bot)</option>
+            <option value="alternate" class="bg-slate-900 text-white">Alternate</option>
+          </select>
+        </div>
+
+        <!-- Atmosphere Background Selector -->
+        <div class="flex items-center gap-1.5 bg-slate-950/60 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
+          <label for="atmosphere-select" class="text-slate-400 hidden xl:inline">Atmosphere:</label>
+          <select
+            id="atmosphere-select"
+            class="bg-transparent text-slate-100 font-medium focus:outline-none cursor-pointer"
+            aria-label="Atmosphere background"
+          >
+            <option value="midnight" class="bg-slate-900 text-white">Midnight Lounge</option>
+            <option value="sunset" class="bg-slate-900 text-white">Golden Sunset</option>
+            <option value="arcade" class="bg-slate-900 text-white">Neon Arcade</option>
+            <option value="nordic" class="bg-slate-900 text-white">Nordic Dawn</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Action & Utility Controls -->
+      <div class="hud-panel rounded-2xl px-2.5 py-2 flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+        <button
+          id="undo-btn"
+          type="button"
+          class="hud-btn px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 flex items-center gap-1.5"
+          title="Undo last move"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+          </svg>
+          <span class="hidden sm:inline">Undo</span>
+        </button>
+
+        <button
+          id="new-game-btn"
+          type="button"
+          class="hud-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-sm flex items-center gap-1.5"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>New Game</span>
+        </button>
+
+        <button
+          id="main-menu-btn"
+          type="button"
+          class="hud-btn px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 flex items-center gap-1.5"
+          title="Return to Main Menu"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span class="hidden md:inline">Menu</span>
+        </button>
+
+        <button
+          id="reset-camera-btn"
+          type="button"
+          class="hud-btn px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 flex items-center gap-1.5"
+          title="Reset camera angle"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span class="hidden md:inline">Reset Cam</span>
+        </button>
+
+        <button
+          id="sound-toggle-btn"
+          type="button"
+          class="hud-btn p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200"
+          title="Toggle Sound Effects"
+          aria-label="Toggle Sound Effects"
+        >
+          <svg id="sound-on-icon" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+          <svg id="sound-off-icon" class="w-4 h-4 text-rose-400 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
+        </button>
+        <a href="../../index.html" class="hud-btn px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 no-underline" title="Return to Koops Games">Hub</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Turn Indicator & Scoreboard Pill (Top-Center / Floating Below Header on Mobile) -->
+  <div id="game-status-pill" class="fixed top-24 sm:top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none w-full max-w-xl px-3 hidden">
+    <div class="hud-panel rounded-2xl px-4 py-2 flex items-center justify-between gap-4 pointer-events-auto">
+      <!-- Active Turn Badge -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span
+          id="turn-disc-badge"
+          class="w-4 h-4 rounded-full shrink-0 bg-gradient-to-br from-rose-400 to-rose-700 ring-2 ring-rose-300/50 shadow-md transition-all duration-200"
+        ></span>
+        <div class="truncate">
+          <div id="turn-status-text" class="text-xs sm:text-sm font-semibold text-white truncate">
+            Your Turn (Red)
+          </div>
+          <div id="turn-sub-text" class="text-[11px] text-slate-400 truncate">
+            Click a column or press 1–7
+          </div>
+        </div>
+      </div>
+
+      <!-- Compact Scoreboard -->
+      <div class="flex items-center gap-2.5 sm:gap-3 text-xs shrink-0 bg-slate-950/55 px-3 py-1.5 rounded-xl border border-white/10">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+          <span id="p1-label" class="text-slate-300 font-medium">P1</span>
+          <span id="score-p1" class="font-bold text-white tabular-nums">0</span>
+        </div>
+        <div class="w-px h-3.5 bg-white/10"></div>
+        <div class="flex items-center gap-1">
+          <span class="text-slate-400">Draws</span>
+          <span id="score-draws" class="font-semibold text-slate-200 tabular-nums">0</span>
+        </div>
+        <div class="w-px h-3.5 bg-white/10"></div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+          <span id="p2-label" class="text-slate-300 font-medium">Bot</span>
+          <span id="score-p2" class="font-bold text-white tabular-nums">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast / Status Notification Banner (Replaces alert/confirm) -->
+  <div id="toast-container" class="fixed top-36 sm:top-32 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden">
+    <div id="toast-message" class="hud-panel rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-amber-200 border-amber-400/30 shadow-xl">
+      Column full! Pick another column.
+    </div>
+  </div>
+
+  <!-- Smooth Transition Veil & Next-Game Status Pill -->
+  <div
+    id="transition-veil"
+    class="fixed inset-0 z-20 pointer-events-none opacity-0 flex items-center justify-center bg-slate-950/20"
+    aria-hidden="true"
+  >
+    <div
+      id="transition-badge"
+      class="hud-panel rounded-full px-4 py-1.5 text-xs font-semibold tracking-wide text-slate-100 border-white/20 flex items-center gap-2 shadow-2xl transform translate-y-2 transition-transform duration-300"
+    >
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      <span id="transition-label">Preparing Fresh Board...</span>
+    </div>
+  </div>
+
+  <!-- Game Over / Victory Banner -->
+  <div id="game-over-modal" class="fixed inset-x-0 bottom-16 sm:bottom-8 z-30 flex justify-center px-4 pointer-events-none hidden transition-all duration-300">
+    <div class="hud-panel animate-pop-in rounded-2xl px-5 py-4 max-w-md w-full text-center pointer-events-auto border border-white/15">
+      <div
+        id="result-badge"
+        class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30 mb-2"
+      >
+        Victory
+      </div>
+      <h2 id="result-title" class="text-xl sm:text-2xl font-bold text-white tracking-tight">
+        You Win!
+      </h2>
+      <p id="result-subtitle" class="text-xs sm:text-sm text-slate-300 mt-1">
+        Four connected in a row — winning discs &amp; beam illuminated.
+      </p>
+      <div class="mt-4 flex items-center justify-center gap-2.5">
+        <button
+          id="play-again-btn"
+          type="button"
+          class="hud-btn px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md"
+        >
+          Play Again
+        </button>
+        <button
+          id="reset-scores-btn"
+          type="button"
+          class="hud-btn px-4 py-2.5 rounded-xl text-sm font-medium bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10"
+        >
+          Reset Scores
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Subtle Controls Tip -->
+  <footer id="game-footer" class="fixed bottom-2.5 left-1/2 -translate-x-1/2 z-20 pointer-events-none w-full max-w-2xl px-3 hidden sm:block">
+    <div class="text-center text-[11px] text-slate-400/90 bg-slate-950/50 backdrop-blur-md border border-white/5 rounded-full py-1 px-4 inline-block mx-auto">
+      <span class="text-slate-200 font-medium">Click / Tap</span> column to drop •
+      <span class="text-slate-200 font-medium">← / →</span> or <span class="text-slate-200 font-medium">1–7</span> + <span class="text-slate-200 font-medium">Enter</span> •
+      <span class="text-slate-200 font-medium">Drag</span> to orbit • <span class="text-slate-200 font-medium">Scroll</span> to zoom
+    </div>
+  </footer>
+
+  <script>
+    /**
+     * =========================================================================
+     * 3D CONNECT 4 — REALISTIC TABLETOP EDITION
+     * Single-file self-contained application using Three.js & Web Audio API.
+     *
+     * Architecture Overview:
+     * 1. SoundEngine: Web Audio API synthesizer generating tactile clacks,
+     *    acrylic/disc impacts, bounce thuds, and celebratory win/draw chimes.
+     * 2. ProceduralTextures: Generates canvas-backed PBR maps (walnut wood grain,
+     *    brushed gunmetal, and subtle studio tabletop surface) with zero external
+     *    asset dependencies.
+     * 3. Connect4Engine: Pure game rules, move history, win/draw detection,
+     *    and minimax + alpha-beta pruning AI across three difficulty tiers:
+     *    Casual, Smart, and Tactical.
+     * 4. SceneController: Builds the 3D rack with translucent front/back panels,
+     *    6x7 circular slot openings, side legs, tabletop, lighting, raycasting,
+     *    hover indicator disc, physics-inspired drop & bounce animation, and
+     *    winning-disc highlight pulse.
+     * 5. AppController: Coordinates UI state, keyboard/mouse/touch input,
+     *    bot thinking cadence, undo logic, score tracking, and toast messages.
+     * =========================================================================
+     */
+
+    (function () {
+      'use strict';
+
+      // Board dimensions & constants
+      const COLS = 7;
+      const ROWS = 6;
+      const EMPTY = 0;
+      const P1 = 1; // Crimson / Red
+      const P2 = 2; // Rich Gold / Amber
+
+      // Atmosphere presets for 3D backdrop, fog, lighting mood, and tabletop styling
+      const ATMOSPHERES = {
+        midnight: {
+          label: 'Midnight Lounge',
+          bgHex: 0x0c1018,
+          fogHex: 0x0c1018,
+          fogDensity: 0.022,
+          tableBase: '#1b2230',
+          tableHighlight: '#2b364b',
+          tableEdge: '#0b0e14',
+          tableBorder: 'rgba(148, 163, 184, 0.1)',
+          matRingHex: 0x38bdf8,
+          hemiSky: 0xdbeafe,
+          hemiGround: 0x3b2618,
+          hemiIntensity: 0.78,
+          keyHex: 0xfff7ed,
+          keyIntensity: 1.45,
+          rimHex: 0x93c5fd,
+          rimIntensity: 0.72,
+          fillHex: 0xfbbf24,
+          fillIntensity: 0.35,
+          backdropTop: '#131b2e',
+          backdropMid: '#0b101b',
+          backdropBottom: '#06080d',
+          accentGlow: 'rgba(56, 189, 248, 0.16)',
+          pattern: 'grid'
+        },
+        sunset: {
+          label: 'Golden Sunset',
+          bgHex: 0x241216,
+          fogHex: 0x241216,
+          fogDensity: 0.02,
+          tableBase: '#331c18',
+          tableHighlight: '#542a1e',
+          tableEdge: '#180c0b',
+          tableBorder: 'rgba(251, 191, 36, 0.16)',
+          matRingHex: 0xfb923c,
+          hemiSky: 0xfdba74,
+          hemiGround: 0x451a03,
+          hemiIntensity: 0.85,
+          keyHex: 0xffedd5,
+          keyIntensity: 1.6,
+          rimHex: 0xf472b6,
+          rimIntensity: 0.8,
+          fillHex: 0xf59e0b,
+          fillIntensity: 0.52,
+          backdropTop: '#3b1628',
+          backdropMid: '#7c2d12',
+          backdropBottom: '#1c0d10',
+          accentGlow: 'rgba(251, 146, 60, 0.22)',
+          pattern: 'horizon'
+        },
+        arcade: {
+          label: 'Neon Arcade',
+          bgHex: 0x090716,
+          fogHex: 0x090716,
+          fogDensity: 0.024,
+          tableBase: '#120e29',
+          tableHighlight: '#211847',
+          tableEdge: '#070512',
+          tableBorder: 'rgba(168, 85, 247, 0.22)',
+          matRingHex: 0x22d3ee,
+          hemiSky: 0xc084fc,
+          hemiGround: 0x0891b2,
+          hemiIntensity: 0.82,
+          keyHex: 0xe0e7ff,
+          keyIntensity: 1.38,
+          rimHex: 0x22d3ee,
+          rimIntensity: 0.95,
+          fillHex: 0xe879f9,
+          fillIntensity: 0.55,
+          backdropTop: '#14082e',
+          backdropMid: '#0b1336',
+          backdropBottom: '#06040f',
+          accentGlow: 'rgba(34, 211, 238, 0.2)',
+          pattern: 'synthgrid'
+        },
+        nordic: {
+          label: 'Nordic Dawn',
+          bgHex: 0x13202e,
+          fogHex: 0x13202e,
+          fogDensity: 0.019,
+          tableBase: '#1e3142',
+          tableHighlight: '#2f4b63',
+          tableEdge: '#0d1620',
+          tableBorder: 'rgba(186, 230, 253, 0.16)',
+          matRingHex: 0x7dd3fc,
+          hemiSky: 0xf0f9ff,
+          hemiGround: 0x1e293b,
+          hemiIntensity: 0.92,
+          keyHex: 0xfef9c3,
+          keyIntensity: 1.48,
+          rimHex: 0x7dd3fc,
+          rimIntensity: 0.78,
+          fillHex: 0xbae6fd,
+          fillIntensity: 0.35,
+          backdropTop: '#1e3a5f',
+          backdropMid: '#3b6e8c',
+          backdropBottom: '#101d2b',
+          accentGlow: 'rgba(125, 211, 252, 0.18)',
+          pattern: 'aurora'
+        }
+      };
+
+      // Physical 3D dimensions (in scene units, where 1 unit ~ 10cm)
+      const CELL_SIZE = 1.05;
+      const SLOT_RADIUS = 0.41;
+      const DISC_RADIUS = 0.385;
+      const DISC_THICKNESS = 0.13;
+      const BOARD_WIDTH = COLS * CELL_SIZE + 0.7;
+      const BOARD_HEIGHT = ROWS * CELL_SIZE + 0.65;
+      const FRAME_DEPTH = 0.44;
+      const PANEL_THICKNESS = 0.032;
+      const LEG_HEIGHT = 0.42;
+
+      // Camera default position & target
+      const DEFAULT_CAM_POS = new THREE.Vector3(0, 2.2, 10.6);
+      const DEFAULT_CAM_TARGET = new THREE.Vector3(0, 3.15, 0);
+
+      // =======================================================================
+      // 1. WEB AUDIO SYNTHESIZER (SOUND ENGINE)
+      // =======================================================================
+      class SoundEngine {
+        constructor() {
+          this.ctx = null;
+          this.enabled = true;
+        }
+
+        ensureContext() {
+          if (!this.enabled) return null;
+          try {
+            if (!this.ctx) {
+              const AudioCtx = window.AudioContext || window.webkitAudioContext;
+              if (AudioCtx) {
+                this.ctx = new AudioCtx();
+              }
+            }
+            if (this.ctx && this.ctx.state === 'suspended') {
+              this.ctx.resume().catch(() => {});
+            }
+            return this.ctx;
+          } catch (err) {
+            return null;
+          }
+        }
+
+        setEnabled(flag) {
+          this.enabled = Boolean(flag);
+          if (this.enabled) {
+            this.ensureContext();
+          }
+        }
+
+        // Subtle tactile tick when moving selection across columns
+        playSelectTick(colIndex = 3) {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            // Slight pitch shift across columns for subtle physical cue
+            const baseFreq = 520 + colIndex * 28;
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(baseFreq, now);
+            osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.55, now + 0.035);
+
+            gain.gain.setValueAtTime(0.055, now);
+            gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.038);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.04);
+          } catch (_) {}
+        }
+
+        // Crisp clack when releasing/dropping a disc
+        playDropStart() {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(340, now);
+            osc.frequency.exponentialRampToValueAtTime(140, now + 0.055);
+
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.065);
+          } catch (_) {}
+        }
+
+        // Tactile impact/clatter when disc lands or bounces
+        playImpact(intensity = 1.0, row = 0) {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const now = ctx.currentTime;
+            const clamped = Math.max(0.15, Math.min(1.2, intensity));
+
+            // Body thud
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            const pitch = 165 + (ROWS - row) * 14;
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(pitch * 1.35, now);
+            osc.frequency.exponentialRampToValueAtTime(pitch * 0.48, now + 0.09);
+
+            gain.gain.setValueAtTime(0.18 * clamped, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.1);
+
+            // Crisp acrylic/plastic click transient using short filtered noise burst
+            const bufferSize = Math.floor(ctx.sampleRate * 0.025);
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+              data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.28));
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1950 + row * 120, now);
+            filter.Q.setValueAtTime(2.6, now);
+
+            const nGain = ctx.createGain();
+            nGain.gain.setValueAtTime(0.14 * clamped, now);
+            nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+
+            noise.connect(filter);
+            filter.connect(nGain);
+            nGain.connect(ctx.destination);
+            noise.start(now);
+          } catch (_) {}
+        }
+
+        // Warm celebratory arpeggio on win
+        playWin() {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5, E5, G5, C6, E6 fanfare
+            const now = ctx.currentTime;
+            notes.forEach((freq, idx) => {
+              const start = now + idx * 0.085;
+              const duration = idx === notes.length - 1 ? 0.72 : 0.45;
+
+              const osc = ctx.createOscillator();
+              const overtone = ctx.createOscillator();
+              const gain = ctx.createGain();
+
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, start);
+
+              overtone.type = 'sine';
+              overtone.frequency.setValueAtTime(freq * 2, start);
+
+              const overtoneGain = ctx.createGain();
+              overtoneGain.gain.setValueAtTime(0.025, start);
+              overtoneGain.gain.exponentialRampToValueAtTime(0.0005, start + duration);
+
+              gain.gain.setValueAtTime(0.0001, start);
+              gain.gain.linearRampToValueAtTime(0.11, start + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.0008, start + duration);
+
+              osc.connect(gain);
+              overtone.connect(overtoneGain);
+              overtoneGain.connect(gain);
+              gain.connect(ctx.destination);
+
+              osc.start(start);
+              overtone.start(start);
+              osc.stop(start + duration + 0.02);
+              overtone.stop(start + duration + 0.02);
+            });
+          } catch (_) {}
+        }
+
+        // Crisp whoosh/release sound when clearing discs or starting next round
+        playTransitionSweep(isStarting = true) {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            if (isStarting) {
+              osc.frequency.setValueAtTime(240, now);
+              osc.frequency.exponentialRampToValueAtTime(480, now + 0.22);
+            } else {
+              osc.frequency.setValueAtTime(420, now);
+              osc.frequency.exponentialRampToValueAtTime(150, now + 0.24);
+            }
+
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.linearRampToValueAtTime(0.065, now + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.26);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.28);
+          } catch (_) {}
+        }
+
+        // Neutral resolution chord on draw
+        playDraw() {
+          const ctx = this.ensureContext();
+          if (!ctx) return;
+          try {
+            const notes = [440, 392, 349.23];
+            const now = ctx.currentTime;
+            notes.forEach((freq, idx) => {
+              const start = now + idx * 0.11;
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, start);
+
+              gain.gain.setValueAtTime(0.08, start);
+              gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.35);
+
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(start);
+              osc.stop(start + 0.37);
+            });
+          } catch (_) {}
+        }
+      }
+
+      // =======================================================================
+      // 2. PROCEDURAL PBR TEXTURES (WOOD GRAIN, BRUSHED METAL & ATMOSPHERES)
+      // =======================================================================
+      class ProceduralTextures {
+        static createWalnutWoodTexture() {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
+
+          const baseGrad = ctx.createLinearGradient(0, 0, 512, 512);
+          baseGrad.addColorStop(0, '#5c3822');
+          baseGrad.addColorStop(0.5, '#472917');
+          baseGrad.addColorStop(1, '#361e10');
+          ctx.fillStyle = baseGrad;
+          ctx.fillRect(0, 0, 512, 512);
+
+          for (let i = 0; i < 180; i++) {
+            const y = (i / 180) * 512;
+            ctx.strokeStyle = i % 3 === 0 ? 'rgba(25, 12, 5, 0.24)' : 'rgba(130, 82, 48, 0.14)';
+            ctx.lineWidth = 1 + (i % 4) * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            const amp = 4 + (i % 7) * 1.4;
+            const freq = 0.012 + (i % 5) * 0.002;
+            for (let x = 0; x <= 512; x += 16) {
+              const wave = Math.sin(x * freq + i * 0.45) * amp;
+              ctx.lineTo(x, y + wave);
+            }
+            ctx.stroke();
+          }
+
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(2, 2);
+          tex.encoding = THREE.sRGBEncoding;
+          return tex;
+        }
+
+        static createBrushedMetalTexture() {
+          const canvas = document.createElement('canvas');
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
+
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(0, 0, 512, 512);
+
+          for (let y = 0; y < 512; y += 2) {
+            const shade = 42 + Math.floor(Math.random() * 28);
+            ctx.fillStyle = `rgba(${shade + 25}, ${shade + 35}, ${shade + 50}, 0.28)`;
+            ctx.fillRect(0, y, 512, 1);
+          }
+
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(2, 2);
+          tex.encoding = THREE.sRGBEncoding;
+          return tex;
+        }
+
+        static createTabletopTexture(preset = ATMOSPHERES.midnight) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1024;
+          canvas.height = 1024;
+          const ctx = canvas.getContext('2d');
+
+          // Atmosphere-matched studio tabletop with radial lighting falloff
+          const grad = ctx.createRadialGradient(512, 512, 60, 512, 512, 540);
+          grad.addColorStop(0, preset.tableHighlight);
+          grad.addColorStop(0.65, preset.tableBase);
+          grad.addColorStop(1, preset.tableEdge);
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 1024, 1024);
+
+          // Optional atmosphere surface detailing
+          if (preset.pattern === 'synthgrid') {
+            ctx.strokeStyle = 'rgba(34, 211, 238, 0.08)';
+            ctx.lineWidth = 1.5;
+            for (let g = 128; g < 1024; g += 64) {
+              ctx.beginPath();
+              ctx.moveTo(g, 0);
+              ctx.lineTo(g, 1024);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.moveTo(0, g);
+              ctx.lineTo(1024, g);
+              ctx.stroke();
+            }
+          } else if (preset.pattern === 'horizon') {
+            const warmBand = ctx.createLinearGradient(0, 260, 0, 760);
+            warmBand.addColorStop(0, 'rgba(251, 146, 60, 0.0)');
+            warmBand.addColorStop(0.5, 'rgba(251, 146, 60, 0.08)');
+            warmBand.addColorStop(1, 'rgba(244, 114, 182, 0.0)');
+            ctx.fillStyle = warmBand;
+            ctx.fillRect(0, 260, 1024, 500);
+          } else if (preset.pattern === 'aurora') {
+            const mist = ctx.createRadialGradient(512, 460, 40, 512, 460, 440);
+            mist.addColorStop(0, 'rgba(125, 211, 252, 0.11)');
+            mist.addColorStop(1, 'rgba(125, 211, 252, 0.0)');
+            ctx.fillStyle = mist;
+            ctx.fillRect(0, 0, 1024, 1024);
+          }
+
+          // Subtle micro-grain noise
+          ctx.globalAlpha = 0.06;
+          for (let i = 0; i < 4500; i++) {
+            const x = Math.random() * 1024;
+            const y = Math.random() * 1024;
+            ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#000000';
+            ctx.fillRect(x, y, 2, 2);
+          }
+          ctx.globalAlpha = 1;
+
+          // Subtle studio mat border ring
+          ctx.strokeStyle = preset.tableBorder;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(180, 290, 664, 444);
+
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.encoding = THREE.sRGBEncoding;
+          return tex;
+        }
+
+        static createAtmosphereDomeTexture(preset = ATMOSPHERES.midnight) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1024;
+          canvas.height = 512;
+          const ctx = canvas.getContext('2d');
+
+          const skyGrad = ctx.createLinearGradient(0, 0, 0, 512);
+          skyGrad.addColorStop(0, preset.backdropTop);
+          skyGrad.addColorStop(0.55, preset.backdropMid);
+          skyGrad.addColorStop(1, preset.backdropBottom);
+          ctx.fillStyle = skyGrad;
+          ctx.fillRect(0, 0, 1024, 512);
+
+          if (preset.pattern === 'horizon') {
+            const sunGlow = ctx.createRadialGradient(512, 275, 12, 512, 275, 210);
+            sunGlow.addColorStop(0, 'rgba(254, 240, 138, 0.55)');
+            sunGlow.addColorStop(0.35, 'rgba(251, 146, 60, 0.25)');
+            sunGlow.addColorStop(1, 'rgba(251, 146, 60, 0)');
+            ctx.fillStyle = sunGlow;
+            ctx.fillRect(0, 0, 1024, 512);
+          } else if (preset.pattern === 'aurora') {
+            ctx.save();
+            ctx.globalAlpha = 0.24;
+            const waveGrad = ctx.createLinearGradient(120, 90, 900, 240);
+            waveGrad.addColorStop(0, '#34d399');
+            waveGrad.addColorStop(0.5, '#38bdf8');
+            waveGrad.addColorStop(1, '#a78bfa');
+            ctx.strokeStyle = waveGrad;
+            ctx.lineWidth = 28;
+            ctx.beginPath();
+            ctx.moveTo(80, 175);
+            ctx.bezierCurveTo(320, 85, 650, 250, 940, 140);
+            ctx.stroke();
+            ctx.restore();
+          } else if (preset.pattern === 'synthgrid') {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(232, 121, 249, 0.14)';
+            ctx.lineWidth = 1.5;
+            for (let x = 0; x <= 1024; x += 64) {
+              ctx.beginPath();
+              ctx.moveTo(x, 250);
+              ctx.lineTo(x, 512);
+              ctx.stroke();
+            }
+            ctx.restore();
+          } else {
+            // Subtle stars/dust motes in Midnight Lounge
+            ctx.save();
+            for (let i = 0; i < 90; i++) {
+              const sx = (i * 197) % 1024;
+              const sy = (i * 89) % 230;
+              ctx.fillStyle = i % 3 === 0 ? 'rgba(186, 230, 253, 0.35)' : 'rgba(255, 255, 255, 0.18)';
+              ctx.beginPath();
+              ctx.arc(sx, sy, (i % 2) + 0.8, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.encoding = THREE.sRGBEncoding;
+          return tex;
+        }
+      }
+
+      // =======================================================================
+      // 3. CONNECT 4 GAME LOGIC & MINIMAX (ALPHA-BETA) BOT ENGINE
+      // =======================================================================
+      class Connect4Engine {
+        constructor() {
+          this.reset();
+        }
+
+        reset(startingPlayer = P1) {
+          this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+          this.currentPlayer = startingPlayer;
+          this.history = []; // Array of { col, row, player }
+          this.gameOver = false;
+          this.winner = EMPTY; // 0 = none/draw, 1 = P1, 2 = P2
+          this.isDraw = false;
+          this.winningLine = null; // Array of [row, col]
+        }
+
+        getLowestAvailableRow(board, col) {
+          if (col < 0 || col >= COLS) return -1;
+          for (let r = 0; r < ROWS; r++) {
+            if (board[r][col] === EMPTY) {
+              return r;
+            }
+          }
+          return -1;
+        }
+
+        isColumnFull(col) {
+          return this.getLowestAvailableRow(this.board, col) === -1;
+        }
+
+        getValidColumns(board = this.board) {
+          const cols = [];
+          for (let c = 0; c < COLS; c++) {
+            if (this.getLowestAvailableRow(board, c) !== -1) {
+              cols.push(c);
+            }
+          }
+          return cols;
+        }
+
+        makeMove(col) {
+          if (this.gameOver) return null;
+          const row = this.getLowestAvailableRow(this.board, col);
+          if (row === -1) return null;
+
+          const player = this.currentPlayer;
+          this.board[row][col] = player;
+          this.history.push({ col, row, player });
+
+          const winInfo = this.checkWin(this.board, player);
+          if (winInfo) {
+            this.gameOver = true;
+            this.winner = player;
+            this.winningLine = winInfo;
+          } else if (this.isBoardFull(this.board)) {
+            this.gameOver = true;
+            this.isDraw = true;
+            this.winner = EMPTY;
+          } else {
+            this.currentPlayer = player === P1 ? P2 : P1;
+          }
+
+          return {
+            col,
+            row,
+            player,
+            gameOver: this.gameOver,
+            winner: this.winner,
+            isDraw: this.isDraw,
+            winningLine: this.winningLine
+          };
+        }
+
+        undoMove(steps = 1) {
+          let undone = 0;
+          for (let i = 0; i < steps; i++) {
+            const last = this.history.pop();
+            if (!last) break;
+            this.board[last.row][last.col] = EMPTY;
+            this.currentPlayer = last.player;
+            undone++;
+          }
+          if (undone > 0) {
+            this.gameOver = false;
+            this.winner = EMPTY;
+            this.isDraw = false;
+            this.winningLine = null;
+          }
+          return undone;
+        }
+
+        isBoardFull(board) {
+          for (let c = 0; c < COLS; c++) {
+            if (board[ROWS - 1][c] === EMPTY) return false;
+          }
+          return true;
+        }
+
+        checkWin(board, player) {
+          const directions = [
+            [0, 1],  // Horizontal
+            [1, 0],  // Vertical
+            [1, 1],  // Diagonal up-right
+            [1, -1]  // Diagonal up-left
+          ];
+
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              if (board[r][c] !== player) continue;
+
+              for (const [dr, dc] of directions) {
+                const line = [[r, c]];
+                let valid = true;
+                for (let step = 1; step < 4; step++) {
+                  const nr = r + dr * step;
+                  const nc = c + dc * step;
+                  if (
+                    nr < 0 || nr >= ROWS ||
+                    nc < 0 || nc >= COLS ||
+                    board[nr][nc] !== player
+                  ) {
+                    valid = false;
+                    break;
+                  }
+                  line.push([nr, nc]);
+                }
+                if (valid) return line;
+              }
+            }
+          }
+          return null;
+        }
+
+        // Bot move selection by difficulty: 'casual', 'smart', 'tactical'
+        chooseBotMove(botPlayer = P2, difficulty = 'smart') {
+          const validCols = this.getValidColumns(this.board);
+          if (validCols.length === 0) return -1;
+
+          const humanPlayer = botPlayer === P1 ? P2 : P1;
+
+          // CASUAL: Mostly random, occasionally spots an immediate win or block
+          if (difficulty === 'casual') {
+            if (Math.random() < 0.35) {
+              for (const c of validCols) {
+                if (this.wouldWin(this.board, c, botPlayer)) return c;
+              }
+            }
+            if (Math.random() < 0.25) {
+              for (const c of validCols) {
+                if (this.wouldWin(this.board, c, humanPlayer)) return c;
+              }
+            }
+            return validCols[Math.floor(Math.random() * validCols.length)];
+          }
+
+          // SMART: Depth-3 minimax with alpha-beta pruning + center preference
+          if (difficulty === 'smart') {
+            // Immediate win check
+            for (const c of validCols) {
+              if (this.wouldWin(this.board, c, botPlayer)) return c;
+            }
+            // Immediate block check
+            for (const c of validCols) {
+              if (this.wouldWin(this.board, c, humanPlayer)) return c;
+            }
+            const { col } = this.minimax(
+              this.board,
+              3,
+              -Infinity,
+              Infinity,
+              true,
+              botPlayer,
+              humanPlayer
+            );
+            return col !== -1 ? col : validCols[Math.floor(validCols.length / 2)];
+          }
+
+          // TACTICAL: Depth-6 minimax with alpha-beta pruning & move ordering
+          const depth = validCols.length <= 4 ? 7 : 6;
+          const { col } = this.minimax(
+            this.board,
+            depth,
+            -Infinity,
+            Infinity,
+            true,
+            botPlayer,
+            humanPlayer
+          );
+          return col !== -1 ? col : validCols[Math.floor(validCols.length / 2)];
+        }
+
+        wouldWin(board, col, player) {
+          const row = this.getLowestAvailableRow(board, col);
+          if (row === -1) return false;
+          board[row][col] = player;
+          const won = Boolean(this.checkWin(board, player));
+          board[row][col] = EMPTY;
+          return won;
+        }
+
+        // Order columns toward the center (3, 2, 4, 1, 5, 0, 6) for faster alpha-beta cutoffs
+        getOrderedValidColumns(board) {
+          const order = [3, 2, 4, 1, 5, 0, 6];
+          const res = [];
+          for (const c of order) {
+            if (this.getLowestAvailableRow(board, c) !== -1) {
+              res.push(c);
+            }
+          }
+          return res;
+        }
+
+        minimax(board, depth, alpha, beta, maximizing, botPlayer, humanPlayer) {
+          const validCols = this.getOrderedValidColumns(board);
+          const botWon = Boolean(this.checkWin(board, botPlayer));
+          const humanWon = Boolean(this.checkWin(board, humanPlayer));
+
+          if (botWon) {
+            return { col: -1, score: 1000000 + depth * 1000 };
+          }
+          if (humanWon) {
+            return { col: -1, score: -1000000 - depth * 1000 };
+          }
+          if (validCols.length === 0) {
+            return { col: -1, score: 0 };
+          }
+          if (depth === 0) {
+            return { col: -1, score: this.evaluateBoard(board, botPlayer, humanPlayer) };
+          }
+
+          let bestCol = validCols[0];
+
+          if (maximizing) {
+            let maxEval = -Infinity;
+            for (const col of validCols) {
+              const row = this.getLowestAvailableRow(board, col);
+              board[row][col] = botPlayer;
+              const evalResult = this.minimax(
+                board,
+                depth - 1,
+                alpha,
+                beta,
+                false,
+                botPlayer,
+                humanPlayer
+              );
+              board[row][col] = EMPTY;
+
+              if (evalResult.score > maxEval) {
+                maxEval = evalResult.score;
+                bestCol = col;
+              }
+              alpha = Math.max(alpha, evalResult.score);
+              if (beta <= alpha) break;
+            }
+            return { col: bestCol, score: maxEval };
+          } else {
+            let minEval = Infinity;
+            for (const col of validCols) {
+              const row = this.getLowestAvailableRow(board, col);
+              board[row][col] = humanPlayer;
+              const evalResult = this.minimax(
+                board,
+                depth - 1,
+                alpha,
+                beta,
+                true,
+                botPlayer,
+                humanPlayer
+              );
+              board[row][col] = EMPTY;
+
+              if (evalResult.score < minEval) {
+                minEval = evalResult.score;
+                bestCol = col;
+              }
+              beta = Math.min(beta, evalResult.score);
+              if (beta <= alpha) break;
+            }
+            return { col: bestCol, score: minEval };
+          }
+        }
+
+        evaluateWindow(windowCells, botPlayer, humanPlayer) {
+          let botCount = 0;
+          let humanCount = 0;
+          let emptyCount = 0;
+
+          for (const cell of windowCells) {
+            if (cell === botPlayer) botCount++;
+            else if (cell === humanPlayer) humanCount++;
+            else emptyCount++;
+          }
+
+          let score = 0;
+          if (botCount === 4) {
+            score += 10000;
+          } else if (botCount === 3 && emptyCount === 1) {
+            score += 120;
+          } else if (botCount === 2 && emptyCount === 2) {
+            score += 18;
+          }
+
+          if (humanCount === 3 && emptyCount === 1) {
+            score -= 150;
+          } else if (humanCount === 2 && emptyCount === 2) {
+            score -= 16;
+          }
+
+          return score;
+        }
+
+        evaluateBoard(board, botPlayer, humanPlayer) {
+          let score = 0;
+
+          // Center column control bonus
+          const centerCol = Math.floor(COLS / 2);
+          let centerBot = 0;
+          for (let r = 0; r < ROWS; r++) {
+            if (board[r][centerCol] === botPlayer) centerBot++;
+          }
+          score += centerBot * 12;
+
+          // Horizontal windows
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c <= COLS - 4; c++) {
+              score += this.evaluateWindow(
+                [board[r][c], board[r][c + 1], board[r][c + 2], board[r][c + 3]],
+                botPlayer,
+                humanPlayer
+              );
+            }
+          }
+
+          // Vertical windows
+          for (let c = 0; c < COLS; c++) {
+            for (let r = 0; r <= ROWS - 4; r++) {
+              score += this.evaluateWindow(
+                [board[r][c], board[r + 1][c], board[r + 2][c], board[r + 3][c]],
+                botPlayer,
+                humanPlayer
+              );
+            }
+          }
+
+          // Diagonal up-right windows
+          for (let r = 0; r <= ROWS - 4; r++) {
+            for (let c = 0; c <= COLS - 4; c++) {
+              score += this.evaluateWindow(
+                [board[r][c], board[r + 1][c + 1], board[r + 2][c + 2], board[r + 3][c + 3]],
+                botPlayer,
+                humanPlayer
+              );
+            }
+          }
+
+          // Diagonal up-left windows
+          for (let r = 0; r <= ROWS - 4; r++) {
+            for (let c = 3; c < COLS; c++) {
+              score += this.evaluateWindow(
+                [board[r][c], board[r + 1][c - 1], board[r + 2][c - 2], board[r + 3][c - 3]],
+                botPlayer,
+                humanPlayer
+              );
+            }
+          }
+
+          return score;
+        }
+      }
+
+      // =======================================================================
+      // 4. THREE.JS 3D SCENE, RACK, DISCS, PHYSICS & RAYCASTING
+      // =======================================================================
+      class SceneController {
+        constructor(containerEl, soundEngine, callbacks) {
+          this.container = containerEl;
+          this.sound = soundEngine;
+          this.callbacks = callbacks;
+
+          this.scene = null;
+          this.camera = null;
+          this.renderer = null;
+          this.controls = null;
+          this.hemiLight = null;
+          this.keyLight = null;
+          this.rimLight = null;
+          this.fillLight = null;
+          this.tableMesh = null;
+          this.matRing = null;
+          this.skyDomeMesh = null;
+          this.currentAtmosphere = 'midnight';
+
+          this.boardGroup = new THREE.Group();
+          this.discMeshes = new Map(); // key: `${row},${col}` -> mesh
+          this.fallingDisc = null; // Active animated falling disc object
+          this.hoverDisc = null; // Hovering preview disc above active column
+          this.hoverColumnGlow = null;
+          this.hitPlanes = []; // Invisible raycast targets per column
+
+          // Win animation & particle state
+          this.winCelebrationGroup = new THREE.Group();
+          this.winBeamMesh = null;
+          this.winHaloMeshes = [];
+          this.winLight = null;
+          this.winStartTime = 0;
+          this.particles = []; // { mesh, vx, vy, vz, rx, ry, rz, life, maxLife, scale }
+          this.particleGeo = new THREE.BoxGeometry(0.085, 0.045, 0.018);
+
+          // Disc exit/clear transition state
+          this.exitingDiscs = []; // { mesh, delay, vy, gravity, spinZ, scaleSpeed, settled }
+
+          // Camera smooth glide state
+          this.cameraTween = null; // { fromPos, toPos, fromTarget, toTarget, elapsed, duration }
+          this.menuShowcaseActive = false;
+
+          this.raycaster = new THREE.Raycaster();
+          this.pointerNDC = new THREE.Vector2();
+          this.pointerDownPos = { x: 0, y: 0 };
+
+          this.hoveredCol = 3;
+          this.activePlayer = P1;
+          this.inputEnabled = true;
+          this.winningCoords = new Set();
+          this.winningList = [];
+          this.elapsedTime = 0;
+          this.lastFrameTime = performance.now();
+
+          // Shared geometries & materials
+          this.discGeometry = null;
+          this.rimGeometry = null;
+          this.p1Material = null;
+          this.p2Material = null;
+          this.hoverMaterial = null;
+
+          this.init();
+          this.bindEvents();
+          this.animate();
+        }
+
+        init() {
+          // Scene & atmospheric depth
+          this.scene = new THREE.Scene();
+          this.scene.background = new THREE.Color(0x0c1018);
+          this.scene.fog = new THREE.FogExp2(0x0c1018, 0.022);
+
+          // Camera
+          const width = this.container.clientWidth || window.innerWidth;
+          const height = this.container.clientHeight || window.innerHeight;
+          this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+          this.camera.position.copy(DEFAULT_CAM_POS);
+
+          // Renderer with soft shadows and tone mapping
+          this.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: 'high-performance'
+          });
+          this.renderer.setSize(width, height);
+          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          this.renderer.shadowMap.enabled = true;
+          this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+          this.renderer.toneMappingExposure = 1.08;
+          this.renderer.outputEncoding = THREE.sRGBEncoding;
+
+          this.container.innerHTML = '';
+          this.container.appendChild(this.renderer.domElement);
+
+          // OrbitControls for smooth orbit, pan, and zoom
+          this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+          this.controls.target.copy(DEFAULT_CAM_TARGET);
+          this.controls.enableDamping = true;
+          this.controls.dampingFactor = 0.065;
+          this.controls.minDistance = 5.2;
+          this.controls.maxDistance = 21;
+          this.controls.maxPolarAngle = Math.PI * 0.495; // Keep camera above tabletop
+          this.controls.minPolarAngle = 0.18;
+          this.controls.update();
+
+          this.setupLighting();
+          this.setupTabletop();
+          this.createDiscAssets();
+          this.buildConnect4Rack();
+          this.buildHoverPreview();
+          this.buildColumnHitTargets();
+          this.setAtmosphere(this.currentAtmosphere);
+          this.setHoveredColumn(3, false);
+        }
+
+        setupLighting() {
+          const preset = ATMOSPHERES[this.currentAtmosphere] || ATMOSPHERES.midnight;
+
+          // Soft hemisphere fill light (sky/studio ceiling + warm bounce)
+          this.hemiLight = new THREE.HemisphereLight(preset.hemiSky, preset.hemiGround, preset.hemiIntensity);
+          this.hemiLight.position.set(0, 14, 0);
+          this.scene.add(this.hemiLight);
+
+          // Primary key light casting crisp soft shadows
+          this.keyLight = new THREE.DirectionalLight(preset.keyHex, preset.keyIntensity);
+          this.keyLight.position.set(6.5, 11.5, 9.0);
+          this.keyLight.castShadow = true;
+          this.keyLight.shadow.mapSize.width = 2048;
+          this.keyLight.shadow.mapSize.height = 2048;
+          this.keyLight.shadow.camera.near = 2;
+          this.keyLight.shadow.camera.far = 32;
+          const d = 7.5;
+          this.keyLight.shadow.camera.left = -d;
+          this.keyLight.shadow.camera.right = d;
+          this.keyLight.shadow.camera.top = d;
+          this.keyLight.shadow.camera.bottom = -d;
+          this.keyLight.shadow.bias = -0.0005;
+          this.scene.add(this.keyLight);
+
+          // Cool rim/back light to define acrylic edges & metallic highlights
+          this.rimLight = new THREE.DirectionalLight(preset.rimHex, preset.rimIntensity);
+          this.rimLight.position.set(-7.5, 7.5, -6.5);
+          this.scene.add(this.rimLight);
+
+          // Subtle warm fill near lower tabletop
+          this.fillLight = new THREE.PointLight(preset.fillHex, preset.fillIntensity, 18);
+          this.fillLight.position.set(0, 2.2, 5.5);
+          this.scene.add(this.fillLight);
+
+          // Dynamic celebration point light activated during win animation
+          this.winLight = new THREE.PointLight(0xffd166, 0, 12);
+          this.winLight.position.set(0, 4.2, 2.2);
+          this.scene.add(this.winLight);
+          this.scene.add(this.winCelebrationGroup);
+        }
+
+        setupTabletop() {
+          const preset = ATMOSPHERES[this.currentAtmosphere] || ATMOSPHERES.midnight;
+          const tableTex = ProceduralTextures.createTabletopTexture(preset);
+          const tableGeo = new THREE.PlaneGeometry(42, 42);
+          const tableMat = new THREE.MeshStandardMaterial({
+            map: tableTex,
+            roughness: 0.78,
+            metalness: 0.08
+          });
+          this.tableMesh = new THREE.Mesh(tableGeo, tableMat);
+          this.tableMesh.rotation.x = -Math.PI / 2;
+          this.tableMesh.position.y = 0;
+          this.tableMesh.receiveShadow = true;
+          this.scene.add(this.tableMesh);
+
+          // Subtle ambient floor bounce ring under rack
+          const matGeo = new THREE.RingGeometry(3.8, 5.2, 64);
+          const matMaterial = new THREE.MeshBasicMaterial({
+            color: preset.matRingHex,
+            transparent: true,
+            opacity: 0.06,
+            side: THREE.DoubleSide,
+            depthWrite: false
+          });
+          this.matRing = new THREE.Mesh(matGeo, matMaterial);
+          this.matRing.rotation.x = -Math.PI / 2;
+          this.matRing.position.y = 0.002;
+          this.scene.add(this.matRing);
+
+          // Surrounding panoramic atmosphere sky dome
+          const domeGeo = new THREE.SphereGeometry(34, 48, 32);
+          const domeTex = ProceduralTextures.createAtmosphereDomeTexture(preset);
+          const domeMat = new THREE.MeshBasicMaterial({
+            map: domeTex,
+            side: THREE.BackSide,
+            depthWrite: false
+          });
+          this.skyDomeMesh = new THREE.Mesh(domeGeo, domeMat);
+          this.scene.add(this.skyDomeMesh);
+        }
+
+        setAtmosphere(atmosphereKey) {
+          const preset = ATMOSPHERES[atmosphereKey] || ATMOSPHERES.midnight;
+          this.currentAtmosphere = atmosphereKey in ATMOSPHERES ? atmosphereKey : 'midnight';
+
+          this.scene.background = new THREE.Color(preset.bgHex);
+          if (this.scene.fog) {
+            this.scene.fog.color.setHex(preset.fogHex);
+            this.scene.fog.density = preset.fogDensity;
+          }
+
+          if (this.hemiLight) {
+            this.hemiLight.color.setHex(preset.hemiSky);
+            this.hemiLight.groundColor.setHex(preset.hemiGround);
+            this.hemiLight.intensity = preset.hemiIntensity;
+          }
+          if (this.keyLight) {
+            this.keyLight.color.setHex(preset.keyHex);
+            this.keyLight.intensity = preset.keyIntensity;
+          }
+          if (this.rimLight) {
+            this.rimLight.color.setHex(preset.rimHex);
+            this.rimLight.intensity = preset.rimIntensity;
+          }
+          if (this.fillLight) {
+            this.fillLight.color.setHex(preset.fillHex);
+            this.fillLight.intensity = preset.fillIntensity;
+          }
+
+          if (this.tableMesh && this.tableMesh.material) {
+            if (this.tableMesh.material.map) {
+              this.tableMesh.material.map.dispose();
+            }
+            this.tableMesh.material.map = ProceduralTextures.createTabletopTexture(preset);
+            this.tableMesh.material.needsUpdate = true;
+          }
+
+          if (this.matRing && this.matRing.material) {
+            this.matRing.material.color.setHex(preset.matRingHex);
+          }
+
+          if (this.skyDomeMesh && this.skyDomeMesh.material) {
+            if (this.skyDomeMesh.material.map) {
+              this.skyDomeMesh.material.map.dispose();
+            }
+            this.skyDomeMesh.material.map = ProceduralTextures.createAtmosphereDomeTexture(preset);
+            this.skyDomeMesh.material.needsUpdate = true;
+          }
+        }
+
+        setWinningLine(winningLine, winner = P1) {
+          this.winningCoords.clear();
+          this.winningList = Array.isArray(winningLine) ? winningLine.slice() : [];
+          this.clearWinEffects();
+
+          if (this.winningList.length === 0) return;
+
+          for (const [r, c] of this.winningList) {
+            this.winningCoords.add(`${r},${c}`);
+          }
+
+          this.winStartTime = this.elapsedTime;
+
+          const isP1 = winner === P1;
+          const beamColor = isP1 ? 0xff4d6d : 0xffbe0b;
+          const haloColor = isP1 ? 0xff8fa3 : 0xfde047;
+
+          if (this.winLight) {
+            this.winLight.color.setHex(beamColor);
+            this.winLight.intensity = 2.4;
+          }
+
+          // Compute world coordinates of first and last winning discs to span a glowing connecting beam
+          const first = this.boardToWorld(this.winningList[0][0], this.winningList[0][1]);
+          const last = this.boardToWorld(
+            this.winningList[this.winningList.length - 1][0],
+            this.winningList[this.winningList.length - 1][1]
+          );
+
+          const startVec = new THREE.Vector3(first.x, first.y, first.z + 0.14);
+          const endVec = new THREE.Vector3(last.x, last.y, last.z + 0.14);
+          const spanVec = new THREE.Vector3().subVectors(endVec, startVec);
+          const spanLen = spanVec.length();
+
+          if (spanLen > 0.001) {
+            const beamGeo = new THREE.CylinderGeometry(0.036, 0.036, spanLen + 0.24, 20);
+            beamGeo.rotateX(Math.PI / 2);
+            const beamMat = new THREE.MeshBasicMaterial({
+              color: beamColor,
+              transparent: true,
+              opacity: 0.85
+            });
+            this.winBeamMesh = new THREE.Mesh(beamGeo, beamMat);
+            const mid = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+            this.winBeamMesh.position.copy(mid);
+            this.winBeamMesh.lookAt(endVec);
+            this.winCelebrationGroup.add(this.winBeamMesh);
+          }
+
+          // Add luminous halo rings around each of the 4 winning discs
+          const haloGeo = new THREE.TorusGeometry(DISC_RADIUS * 1.12, 0.022, 14, 42);
+          for (const [r, c] of this.winningList) {
+            const pos = this.boardToWorld(r, c);
+            const haloMat = new THREE.MeshBasicMaterial({
+              color: haloColor,
+              transparent: true,
+              opacity: 0.78
+            });
+            const halo = new THREE.Mesh(haloGeo, haloMat);
+            halo.position.set(pos.x, pos.y, pos.z + 0.11);
+            this.winCelebrationGroup.add(halo);
+            this.winHaloMeshes.push({ mesh: halo, basePos: pos.clone(), row: r, col: c });
+          }
+
+          // Spawn celebratory 3D confetti & spark motes around the winning cluster
+          const centerWorld = new THREE.Vector3().addVectors(first, last).multiplyScalar(0.5);
+          this.spawnCelebrationParticles(centerWorld, isP1);
+
+          // Smoothly glide camera to a dramatic celebratory framing angle
+          const celebPos = new THREE.Vector3(
+            centerWorld.x * 0.28 + 1.15,
+            DEFAULT_CAM_POS.y + 0.65,
+            DEFAULT_CAM_POS.z - 1.1
+          );
+          const celebTarget = new THREE.Vector3(
+            centerWorld.x * 0.25,
+            Math.max(2.4, centerWorld.y * 0.92),
+            0.15
+          );
+          this.startCameraTween(celebPos, celebTarget, 0.75);
+        }
+
+        spawnCelebrationParticles(origin, isP1) {
+          const palette = isP1
+            ? [0xf43f5e, 0xfbbf24, 0xfde047, 0xfb7185, 0xffffff]
+            : [0xf59e0b, 0xfde047, 0x34d399, 0xf97316, 0xffffff];
+
+          const count = 68;
+          for (let i = 0; i < count; i++) {
+            const colorHex = palette[i % palette.length];
+            const mat = new THREE.MeshStandardMaterial({
+              color: colorHex,
+              roughness: 0.3,
+              metalness: 0.35,
+              emissive: colorHex,
+              emissiveIntensity: 0.35,
+              transparent: true,
+              opacity: 1
+            });
+
+            const mesh = new THREE.Mesh(this.particleGeo, mat);
+            mesh.position.set(
+              origin.x + (Math.random() - 0.5) * 2.2,
+              origin.y + (Math.random() - 0.5) * 1.4,
+              origin.z + 0.35 + (Math.random() - 0.5) * 0.6
+            );
+
+            const angle = Math.random() * Math.PI * 2;
+            const spread = 1.6 + Math.random() * 3.8;
+            const vx = Math.cos(angle) * spread * 0.75;
+            const vy = 2.6 + Math.random() * 4.5;
+            const vz = 1.2 + Math.random() * 3.2;
+
+            const scale = 0.75 + Math.random() * 0.9;
+            mesh.scale.setScalar(scale);
+            this.winCelebrationGroup.add(mesh);
+
+            this.particles.push({
+              mesh,
+              vx,
+              vy,
+              vz,
+              rx: (Math.random() - 0.5) * 11,
+              ry: (Math.random() - 0.5) * 11,
+              rz: (Math.random() - 0.5) * 11,
+              life: 0,
+              maxLife: 1.4 + Math.random() * 1.1,
+              scale
+            });
+          }
+        }
+
+        clearWinEffects() {
+          if (this.winLight) {
+            this.winLight.intensity = 0;
+          }
+
+          if (this.winBeamMesh) {
+            this.winCelebrationGroup.remove(this.winBeamMesh);
+            this.winBeamMesh.geometry.dispose();
+            this.winBeamMesh.material.dispose();
+            this.winBeamMesh = null;
+          }
+
+          for (const item of this.winHaloMeshes) {
+            this.winCelebrationGroup.remove(item.mesh);
+            item.mesh.geometry.dispose();
+            item.mesh.material.dispose();
+          }
+          this.winHaloMeshes = [];
+
+          for (const p of this.particles) {
+            this.winCelebrationGroup.remove(p.mesh);
+            if (p.mesh.material) p.mesh.material.dispose();
+          }
+          this.particles = [];
+        }
+
+        startCameraTween(toPos, toTarget, duration = 0.65) {
+          this.cameraTween = {
+            fromPos: this.camera.position.clone(),
+            toPos: toPos.clone(),
+            fromTarget: this.controls.target.clone(),
+            toTarget: toTarget.clone(),
+            elapsed: 0,
+            duration: Math.max(0.15, duration)
+          };
+        }
+
+        stepCameraTween(dt) {
+          if (!this.cameraTween) return;
+          const tw = this.cameraTween;
+          tw.elapsed += dt;
+          const rawT = Math.min(1, tw.elapsed / tw.duration);
+          // Smooth cubic ease-in-out
+          const eased = rawT < 0.5
+            ? 4 * rawT * rawT * rawT
+            : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+          this.camera.position.lerpVectors(tw.fromPos, tw.toPos, eased);
+          this.controls.target.lerpVectors(tw.fromTarget, tw.toTarget, eased);
+          this.controls.update();
+
+          if (rawT >= 1) {
+            this.cameraTween = null;
+          }
+        }
+
+        stepParticles(dt) {
+          if (this.particles.length === 0) return;
+
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.life += dt;
+            if (p.life >= p.maxLife) {
+              this.winCelebrationGroup.remove(p.mesh);
+              if (p.mesh.material) p.mesh.material.dispose();
+              this.particles.splice(i, 1);
+              continue;
+            }
+
+            // Gravity + gentle air drag
+            const drag = Math.pow(0.45, dt);
+            p.vx *= drag;
+            p.vz *= drag;
+            p.vy -= 8.8 * dt;
+
+            p.mesh.position.x += p.vx * dt;
+            p.mesh.position.y += p.vy * dt;
+            p.mesh.position.z += p.vz * dt;
+
+            // Tabletop bounce for confetti pieces
+            if (p.mesh.position.y < 0.04) {
+              p.mesh.position.y = 0.04;
+              p.vy = Math.abs(p.vy) * 0.32;
+              p.vx *= 0.72;
+              p.vz *= 0.72;
+            }
+
+            p.mesh.rotation.x += p.rx * dt;
+            p.mesh.rotation.y += p.ry * dt;
+            p.mesh.rotation.z += p.rz * dt;
+
+            const remainingRatio = 1 - p.life / p.maxLife;
+            const fade = Math.min(1, remainingRatio * 2.2);
+            p.mesh.scale.setScalar(p.scale * fade);
+            if (p.mesh.material) {
+              p.mesh.material.opacity = fade;
+            }
+          }
+        }
+
+        // Smoothly drops/clears existing discs out of the rack before starting a new game
+        animateClearDiscs(onDone) {
+          this.clearWinEffects();
+          this.winningCoords.clear();
+          this.winningList = [];
+
+          if (this.fallingDisc && this.fallingDisc.mesh) {
+            this.scene.remove(this.fallingDisc.mesh);
+            this.fallingDisc = null;
+          }
+
+          if (this.discMeshes.size === 0) {
+            this.discMeshes.clear();
+            if (typeof onDone === 'function') onDone();
+            return;
+          }
+
+          this.exitingDiscs = [];
+          for (const [key, mesh] of this.discMeshes.entries()) {
+            const [r, c] = key.split(',').map(Number);
+            // Stagger bottom-to-top and outer-to-inner for a natural tray-release cascade
+            const colDist = Math.abs(c - 3);
+            const delay = r * 0.025 + colDist * 0.02;
+            this.exitingDiscs.push({
+              mesh,
+              delay,
+              vy: -0.6,
+              gravity: 28.0,
+              spinZ: (c - 3) * 0.8 + (Math.random() - 0.5) * 1.4,
+              settled: false
+            });
+          }
+          this.discMeshes.clear();
+
+          this.exitCompleteCallback = onDone;
+        }
+
+        stepExitingDiscs(dt) {
+          if (this.exitingDiscs.length === 0) return;
+
+          let activeCount = 0;
+          for (let i = this.exitingDiscs.length - 1; i >= 0; i--) {
+            const item = this.exitingDiscs[i];
+            if (item.delay > 0) {
+              item.delay -= dt;
+              activeCount++;
+              continue;
+            }
+
+            item.vy -= item.gravity * dt;
+            item.mesh.position.y += item.vy * dt;
+            item.mesh.rotation.z += item.spinZ * dt;
+
+            // Shrink slightly as discs fall beneath the base plinth
+            if (item.mesh.position.y < LEG_HEIGHT + 0.1) {
+              const s = Math.max(0.01, item.mesh.scale.x - dt * 3.8);
+              item.mesh.scale.setScalar(s);
+            }
+
+            if (item.mesh.position.y < -0.5 || item.mesh.scale.x <= 0.02) {
+              this.scene.remove(item.mesh);
+              if (item.mesh.material) item.mesh.material.dispose();
+              this.exitingDiscs.splice(i, 1);
+            } else {
+              activeCount++;
+            }
+          }
+
+          if (activeCount === 0 && typeof this.exitCompleteCallback === 'function') {
+            const cb = this.exitCompleteCallback;
+            this.exitCompleteCallback = null;
+            cb();
+          }
+        }
+
+        resetCamera() {
+          this.startCameraTween(DEFAULT_CAM_POS, DEFAULT_CAM_TARGET, 0.55);
+        }
+
+        setMenuShowcaseActive(active) {
+          this.menuShowcaseActive = Boolean(active);
+          if (this.menuShowcaseActive) {
+            this.cameraTween = null;
+            this.camera.position.set(2.4, 2.75, 11.4);
+            this.controls.target.set(0, 3.15, 0);
+            this.controls.update();
+          } else {
+            this.resetCamera();
+          }
+        }
+
+        // Convert board (row 0..5 bottom->top, col 0..6 left->right) to 3D world position
+        boardToWorld(row, col) {
+          const x = (col - (COLS - 1) / 2) * CELL_SIZE;
+          const y = LEG_HEIGHT + 0.24 + (row + 0.5) * CELL_SIZE;
+          const z = 0;
+          return new THREE.Vector3(x, y, z);
+        }
+
+        createDiscAssets() {
+          // LatheGeometry creates a realistic beveled & slightly recessed coin/disc profile
+          const halfH = DISC_THICKNESS * 0.5;
+          const bevel = 0.018;
+          const rOuter = DISC_RADIUS;
+          const rInner = DISC_RADIUS * 0.72;
+
+          const pts = [
+            new THREE.Vector2(0.001, -halfH),
+            new THREE.Vector2(rInner, -halfH),
+            new THREE.Vector2(rInner + 0.012, -halfH + 0.008),
+            new THREE.Vector2(rOuter - bevel, -halfH),
+            new THREE.Vector2(rOuter, -halfH + bevel),
+            new THREE.Vector2(rOuter, halfH - bevel),
+            new THREE.Vector2(rOuter - bevel, halfH),
+            new THREE.Vector2(rInner + 0.012, halfH - 0.008),
+            new THREE.Vector2(rInner, halfH),
+            new THREE.Vector2(0.001, halfH)
+          ];
+
+          this.discGeometry = new THREE.LatheGeometry(pts, 48);
+          // Rotate so flat circular faces sit in the XY plane facing front/back (+/-Z)
+          this.discGeometry.rotateX(Math.PI / 2);
+          this.discGeometry.computeVertexNormals();
+
+          // Subtle concentric embossed ring detail on disc faces
+          this.rimGeometry = new THREE.TorusGeometry(DISC_RADIUS * 0.54, 0.012, 12, 40);
+
+          // Player 1: Vibrant Crimson / Red physical material
+          this.p1Material = new THREE.MeshPhysicalMaterial({
+            color: 0xdc2626,
+            roughness: 0.22,
+            metalness: 0.14,
+            clearcoat: 0.75,
+            clearcoatRoughness: 0.14
+          });
+
+          // Player 2: Rich Gold / Amber physical material
+          this.p2Material = new THREE.MeshPhysicalMaterial({
+            color: 0xf59e0b,
+            roughness: 0.2,
+            metalness: 0.28,
+            clearcoat: 0.8,
+            clearcoatRoughness: 0.12
+          });
+
+          this.hoverMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0xef4444,
+            roughness: 0.25,
+            metalness: 0.15,
+            clearcoat: 0.7,
+            transparent: true,
+            opacity: 0.68
+          });
+        }
+
+        createDiscMesh(player, isHover = false) {
+          const baseMat = isHover
+            ? this.hoverMaterial
+            : player === P1
+            ? this.p1Material
+            : this.p2Material;
+
+          // Clone material per disc only when needed (e.g., winning highlight pulse)
+          const mat = isHover ? baseMat : baseMat.clone();
+          const mesh = new THREE.Mesh(this.discGeometry, mat);
+          mesh.castShadow = !isHover;
+          mesh.receiveShadow = !isHover;
+
+          // Add subtle embossed inner ring on front and back faces
+          const ringMat = mat.clone();
+          if (ringMat.color) {
+            ringMat.color.multiplyScalar(0.84);
+          }
+          const frontRing = new THREE.Mesh(this.rimGeometry, ringMat);
+          frontRing.position.z = DISC_THICKNESS * 0.48;
+          mesh.add(frontRing);
+
+          const backRing = new THREE.Mesh(this.rimGeometry, ringMat);
+          backRing.position.z = -DISC_THICKNESS * 0.48;
+          mesh.add(backRing);
+
+          mesh.userData = { player };
+          return mesh;
+        }
+
+        // Builds a realistic Connect 4 frame with walnut/brushed-metal trim,
+        // side support legs, and front/back clear acrylic panels with 6x7 circular cutouts
+        // using a Shape + Holes extruded or framed grid.
+        buildConnect4Rack() {
+          while (this.boardGroup.children.length > 0) {
+            this.boardGroup.remove(this.boardGroup.children[0]);
+          }
+
+          const woodTex = ProceduralTextures.createWalnutWoodTexture();
+          const metalTex = ProceduralTextures.createBrushedMetalTexture();
+
+          const frameMat = new THREE.MeshStandardMaterial({
+            map: woodTex,
+            roughness: 0.42,
+            metalness: 0.15
+          });
+
+          const trimMat = new THREE.MeshStandardMaterial({
+            map: metalTex,
+            roughness: 0.34,
+            metalness: 0.78
+          });
+
+          const acrylicMat = new THREE.MeshPhysicalMaterial({
+            color: 0xe2e8f0,
+            roughness: 0.08,
+            metalness: 0.0,
+            transmission: 0.78,
+            transparent: true,
+            opacity: 0.24,
+            ior: 1.49,
+            reflectivity: 0.65,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          });
+
+          const gridBottomY = LEG_HEIGHT + 0.24;
+          const gridTopY = gridBottomY + ROWS * CELL_SIZE;
+          const gridCenterY = (gridBottomY + gridTopY) * 0.5;
+          const gridSpanX = COLS * CELL_SIZE;
+          const gridSpanY = ROWS * CELL_SIZE;
+
+          // 1. Bottom base plinth
+          const baseGeo = new THREE.BoxGeometry(BOARD_WIDTH + 0.55, 0.24, FRAME_DEPTH + 0.65);
+          const baseMesh = new THREE.Mesh(baseGeo, frameMat);
+          baseMesh.position.set(0, LEG_HEIGHT + 0.12, 0);
+          baseMesh.castShadow = true;
+          baseMesh.receiveShadow = true;
+          this.boardGroup.add(baseMesh);
+
+          // Metallic accent strip along front of base
+          const baseTrimGeo = new THREE.BoxGeometry(BOARD_WIDTH + 0.57, 0.045, FRAME_DEPTH + 0.67);
+          const baseTrim = new THREE.Mesh(baseTrimGeo, trimMat);
+          baseTrim.position.set(0, LEG_HEIGHT + 0.21, 0);
+          this.boardGroup.add(baseTrim);
+
+          // 2. Left & Right side support legs resting on tabletop (y = 0)
+          const legX = BOARD_WIDTH * 0.5 + 0.12;
+          const legGeo = new THREE.BoxGeometry(0.28, LEG_HEIGHT + 0.18, FRAME_DEPTH + 0.75);
+          [-1, 1].forEach((side) => {
+            const leg = new THREE.Mesh(legGeo, frameMat);
+            leg.position.set(side * legX, (LEG_HEIGHT + 0.18) * 0.5, 0);
+            leg.castShadow = true;
+            leg.receiveShadow = true;
+            this.boardGroup.add(leg);
+
+            // Foot pad
+            const footGeo = new THREE.BoxGeometry(0.32, 0.04, FRAME_DEPTH + 0.8);
+            const foot = new THREE.Mesh(footGeo, trimMat);
+            foot.position.set(side * legX, 0.02, 0);
+            foot.receiveShadow = true;
+            this.boardGroup.add(foot);
+          });
+
+          // 3. Left & Right vertical frame pillars
+          const pillarGeo = new THREE.BoxGeometry(0.26, gridSpanY + 0.24, FRAME_DEPTH);
+          const pillarX = gridSpanX * 0.5 + 0.13;
+          [-1, 1].forEach((side) => {
+            const pillar = new THREE.Mesh(pillarGeo, frameMat);
+            pillar.position.set(side * pillarX, gridCenterY, 0);
+            pillar.castShadow = true;
+            pillar.receiveShadow = true;
+            this.boardGroup.add(pillar);
+          });
+
+          // 4. Top header rail with subtle metallic chamfer
+          const topRailGeo = new THREE.BoxGeometry(gridSpanX + 0.52, 0.24, FRAME_DEPTH + 0.04);
+          const topRail = new THREE.Mesh(topRailGeo, frameMat);
+          topRail.position.set(0, gridTopY + 0.12, 0);
+          topRail.castShadow = true;
+          this.boardGroup.add(topRail);
+
+          const topAccentGeo = new THREE.BoxGeometry(gridSpanX + 0.54, 0.035, FRAME_DEPTH + 0.06);
+          const topAccent = new THREE.Mesh(topAccentGeo, trimMat);
+          topAccent.position.set(0, gridTopY + 0.22, 0);
+          this.boardGroup.add(topAccent);
+
+          // 5. Internal vertical column dividers & horizontal floor ribs (create real physical chambers!)
+          const dividerHeight = gridSpanY;
+          const dividerGeo = new THREE.BoxGeometry(0.055, dividerHeight, FRAME_DEPTH - 0.1);
+          for (let c = 0; c <= COLS; c++) {
+            const x = (c - COLS / 2) * CELL_SIZE;
+            const divider = new THREE.Mesh(dividerGeo, trimMat);
+            divider.position.set(x, gridCenterY, 0);
+            divider.castShadow = true;
+            divider.receiveShadow = true;
+            this.boardGroup.add(divider);
+          }
+
+          // Subtle horizontal shelf bars between rows at back/mid depth so discs seat cleanly
+          const shelfGeo = new THREE.BoxGeometry(gridSpanX, 0.025, 0.08);
+          for (let r = 1; r < ROWS; r++) {
+            const y = gridBottomY + r * CELL_SIZE;
+            const shelf = new THREE.Mesh(shelfGeo, trimMat);
+            shelf.position.set(0, y, -0.06);
+            this.boardGroup.add(shelf);
+          }
+
+          // 6. Front and Back perforated panels with 6x7 circular slot openings
+          // Built via THREE.Shape with circular holes so discs are visible inside chambers
+          // and framed by clean circular rims.
+          const panelShape = new THREE.Shape();
+          const halfW = gridSpanX * 0.5;
+          const halfH = gridSpanY * 0.5;
+          panelShape.moveTo(-halfW, -halfH);
+          panelShape.lineTo(halfW, -halfH);
+          panelShape.lineTo(halfW, halfH);
+          panelShape.lineTo(-halfW, halfH);
+          panelShape.closePath();
+
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              const cx = (c - (COLS - 1) / 2) * CELL_SIZE;
+              const cy = (r - (ROWS - 1) / 2) * CELL_SIZE;
+              const hole = new THREE.Path();
+              hole.absarc(cx, cy, SLOT_RADIUS, 0, Math.PI * 2, true);
+              panelShape.holes.push(hole);
+            }
+          }
+
+          const plateGeo = new THREE.ShapeGeometry(panelShape, 36);
+          const panelZOffset = FRAME_DEPTH * 0.5 - PANEL_THICKNESS * 0.5;
+
+          const frontPanel = new THREE.Mesh(plateGeo, acrylicMat);
+          frontPanel.position.set(0, gridCenterY, panelZOffset);
+          this.boardGroup.add(frontPanel);
+
+          const backPanel = new THREE.Mesh(plateGeo, acrylicMat);
+          backPanel.position.set(0, gridCenterY, -panelZOffset);
+          this.boardGroup.add(backPanel);
+
+          // Add metallic circular slot bezel rings on front & back for high tactile realism
+          const bezelGeo = new THREE.TorusGeometry(SLOT_RADIUS, 0.016, 12, 36);
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              const cx = (c - (COLS - 1) / 2) * CELL_SIZE;
+              const cy = gridBottomY + (r + 0.5) * CELL_SIZE;
+
+              const frontBezel = new THREE.Mesh(bezelGeo, trimMat);
+              frontBezel.position.set(cx, cy, panelZOffset + 0.008);
+              this.boardGroup.add(frontBezel);
+
+              const backBezel = new THREE.Mesh(bezelGeo, trimMat);
+              backBezel.position.set(cx, cy, -panelZOffset - 0.008);
+              this.boardGroup.add(backBezel);
+            }
+          }
+
+          this.scene.add(this.boardGroup);
+        }
+
+        buildHoverPreview() {
+          this.hoverDisc = this.createDiscMesh(P1, true);
+          this.hoverDisc.visible = false;
+          this.scene.add(this.hoverDisc);
+
+          // Subtle glowing indicator ring directly under hovering disc
+          const glowGeo = new THREE.RingGeometry(DISC_RADIUS * 0.78, DISC_RADIUS * 1.02, 36);
+          const glowMat = new THREE.MeshBasicMaterial({
+            color: 0xf87171,
+            transparent: true,
+            opacity: 0.42,
+            side: THREE.DoubleSide,
+            depthWrite: false
+          });
+          this.hoverColumnGlow = new THREE.Mesh(glowGeo, glowMat);
+          this.hoverColumnGlow.rotation.x = -Math.PI / 2;
+          this.hoverColumnGlow.visible = false;
+          this.scene.add(this.hoverColumnGlow);
+        }
+
+        buildColumnHitTargets() {
+          this.hitPlanes = [];
+          const gridBottomY = LEG_HEIGHT + 0.24;
+          const totalHeight = ROWS * CELL_SIZE + 1.35;
+          const centerY = gridBottomY + totalHeight * 0.5 - 0.2;
+
+          const planeGeo = new THREE.BoxGeometry(CELL_SIZE * 0.98, totalHeight, 0.7);
+          const invisibleMat = new THREE.MeshBasicMaterial({
+            visible: false
+          });
+
+          for (let c = 0; c < COLS; c++) {
+            const x = (c - (COLS - 1) / 2) * CELL_SIZE;
+            const hitMesh = new THREE.Mesh(planeGeo, invisibleMat);
+            hitMesh.position.set(x, centerY, 0.15);
+            hitMesh.userData = { col: c };
+            this.scene.add(hitMesh);
+            this.hitPlanes.push(hitMesh);
+          }
+        }
+
+        setActivePlayer(player) {
+          this.activePlayer = player;
+          if (!this.hoverDisc) return;
+
+          const isRed = player === P1;
+          this.hoverMaterial.color.setHex(isRed ? 0xef4444 : 0xf59e0b);
+          if (this.hoverColumnGlow) {
+            this.hoverColumnGlow.material.color.setHex(isRed ? 0xf87171 : 0xfbbf24);
+          }
+          this.updateHoverVisibility();
+        }
+
+        setInputEnabled(enabled) {
+          this.inputEnabled = enabled;
+          this.updateHoverVisibility();
+        }
+
+        updateHoverVisibility() {
+          const show = this.inputEnabled && !this.fallingDisc && this.hoveredCol >= 0;
+          if (this.hoverDisc) {
+            this.hoverDisc.visible = show;
+          }
+          if (this.hoverColumnGlow) {
+            this.hoverColumnGlow.visible = show;
+          }
+        }
+
+        setHoveredColumn(col, playSound = true) {
+          if (col < 0 || col >= COLS) return;
+          const changed = col !== this.hoveredCol;
+          this.hoveredCol = col;
+
+          const topSlot = this.boardToWorld(ROWS - 1, col);
+          const hoverY = topSlot.y + CELL_SIZE * 1.15;
+
+          if (this.hoverDisc) {
+            this.hoverDisc.position.set(topSlot.x, hoverY, 0);
+          }
+          if (this.hoverColumnGlow) {
+            this.hoverColumnGlow.position.set(topSlot.x, hoverY - 0.22, 0);
+          }
+
+          this.updateHoverVisibility();
+
+          if (changed && playSound && this.inputEnabled && !this.fallingDisc) {
+            this.sound.playSelectTick(col);
+          }
+        }
+
+        // Animates a disc dropping from above the board into (row, col) with gravity & bounce
+        dropDisc(row, col, player, onComplete) {
+          const targetPos = this.boardToWorld(row, col);
+          const startPos = this.boardToWorld(ROWS - 1, col);
+          startPos.y += CELL_SIZE * 1.25;
+
+          const mesh = this.createDiscMesh(player, false);
+          mesh.position.copy(startPos);
+          // Slight initial tilt for organic physical character
+          mesh.rotation.set(0.06, (Math.random() - 0.5) * 0.25, (Math.random() - 0.5) * 0.14);
+          this.scene.add(mesh);
+
+          this.sound.playDropStart();
+
+          this.fallingDisc = {
+            mesh,
+            row,
+            col,
+            player,
+            targetY: targetPos.y,
+            x: targetPos.x,
+            z: targetPos.z,
+            vy: -1.8, // Initial downward velocity
+            gravity: 34.0, // Snappy, realistic tabletop gravity
+            bouncesDone: 0,
+            maxBounces: 2,
+            onComplete
+          };
+
+          this.updateHoverVisibility();
+        }
+
+        stepFallingDisc(dt) {
+          if (!this.fallingDisc) return;
+          const d = this.fallingDisc;
+
+          d.vy -= d.gravity * dt;
+          d.mesh.position.y += d.vy * dt;
+
+          // Subtle wobble damping as it falls
+          d.mesh.rotation.z *= Math.pow(0.15, dt);
+          d.mesh.rotation.x *= Math.pow(0.15, dt);
+
+          if (d.mesh.position.y <= d.targetY) {
+            d.mesh.position.y = d.targetY;
+
+            const impactSpeed = Math.abs(d.vy);
+            if (d.bouncesDone < d.maxBounces && impactSpeed > 2.4) {
+              d.bouncesDone++;
+              // Restitution coefficient (bouncier on first tiny bounce, dampened second)
+              const restitution = d.bouncesDone === 1 ? 0.24 : 0.12;
+              d.vy = impactSpeed * restitution;
+              d.mesh.rotation.z = (Math.random() - 0.5) * 0.08 * (1 / d.bouncesDone);
+              this.sound.playImpact(impactSpeed / 14, d.row);
+            } else {
+              // Settled in place
+              d.mesh.position.set(d.x, d.targetY, d.z);
+              d.mesh.rotation.set(0, 0, 0);
+              this.sound.playImpact(Math.max(0.35, impactSpeed / 13), d.row);
+
+              const key = `${d.row},${d.col}`;
+              this.discMeshes.set(key, d.mesh);
+
+              const callback = d.onComplete;
+              this.fallingDisc = null;
+              this.updateHoverVisibility();
+
+              if (typeof callback === 'function') {
+                callback();
+              }
+            }
+          }
+        }
+
+        clearBoardDiscs() {
+          for (const mesh of this.discMeshes.values()) {
+            this.scene.remove(mesh);
+            if (mesh.material) mesh.material.dispose();
+          }
+          this.discMeshes.clear();
+
+          if (this.fallingDisc && this.fallingDisc.mesh) {
+            this.scene.remove(this.fallingDisc.mesh);
+            this.fallingDisc = null;
+          }
+
+          this.winningCoords.clear();
+          this.updateHoverVisibility();
+        }
+
+        // Syncs scene discs to match engine board state (used for Undo)
+        syncBoardFromState(board) {
+          this.clearBoardDiscs();
+          for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              const p = board[r][c];
+              if (p !== EMPTY) {
+                const mesh = this.createDiscMesh(p, false);
+                mesh.position.copy(this.boardToWorld(r, c));
+                this.scene.add(mesh);
+                this.discMeshes.set(`${r},${c}`, mesh);
+              }
+            }
+          }
+        }
+
+        updatePointerNDC(clientX, clientY) {
+          const rect = this.renderer.domElement.getBoundingClientRect();
+          this.pointerNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+          this.pointerNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        raycastColumn(clientX, clientY) {
+          this.updatePointerNDC(clientX, clientY);
+          this.raycaster.setFromCamera(this.pointerNDC, this.camera);
+          const hits = this.raycaster.intersectObjects(this.hitPlanes, false);
+          if (hits.length > 0 && typeof hits[0].object.userData.col === 'number') {
+            return hits[0].object.userData.col;
+          }
+          return -1;
+        }
+
+        bindEvents() {
+          window.addEventListener('resize', () => {
+            if (!this.container || !this.renderer || !this.camera) return;
+            const w = this.container.clientWidth || window.innerWidth;
+            const h = this.container.clientHeight || window.innerHeight;
+            this.camera.aspect = w / h;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(w, h);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          });
+
+          const dom = this.renderer.domElement;
+
+          dom.addEventListener('pointermove', (e) => {
+            const col = this.raycastColumn(e.clientX, e.clientY);
+            if (col !== -1) {
+              this.setHoveredColumn(col, true);
+              if (this.callbacks.onHoverColumn) {
+                this.callbacks.onHoverColumn(col);
+              }
+            }
+          });
+
+          dom.addEventListener('pointerdown', (e) => {
+            this.pointerDownPos.x = e.clientX;
+            this.pointerDownPos.y = e.clientY;
+          });
+
+          dom.addEventListener('pointerup', (e) => {
+            const dx = e.clientX - this.pointerDownPos.x;
+            const dy = e.clientY - this.pointerDownPos.y;
+            const movedDistance = Math.hypot(dx, dy);
+
+            // Treat as tap/click only if pointer did not drag to orbit
+            if (movedDistance < 8 && e.button === 0) {
+              const col = this.raycastColumn(e.clientX, e.clientY);
+              if (col !== -1) {
+                this.setHoveredColumn(col, false);
+                if (this.callbacks.onSelectColumn) {
+                  this.callbacks.onSelectColumn(col);
+                }
+              }
+            }
+          });
+        }
+
+        animate() {
+          requestAnimationFrame(() => this.animate());
+
+          const now = performance.now();
+          const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
+          this.lastFrameTime = now;
+          this.elapsedTime += dt;
+
+          // Step camera glide, disc physics, exit cascade, and celebration particles
+          this.stepCameraTween(dt);
+          this.stepFallingDisc(dt);
+          this.stepExitingDiscs(dt);
+          this.stepParticles(dt);
+
+          // Gentle cinematic sway while on the main menu
+          if (this.menuShowcaseActive && !this.cameraTween) {
+            const swayAngle = Math.sin(this.elapsedTime * 0.45) * 0.16;
+            const radius = 11.4;
+            this.camera.position.x = Math.sin(swayAngle) * radius;
+            this.camera.position.z = Math.cos(swayAngle) * radius;
+            this.camera.position.y = 2.75 + Math.sin(this.elapsedTime * 0.7) * 0.22;
+            this.controls.target.set(0, 3.15, 0);
+          }
+
+          // Gentle hover animation on preview disc & glow ring
+          if (this.hoverDisc && this.hoverDisc.visible) {
+            const baseWorld = this.boardToWorld(ROWS - 1, this.hoveredCol);
+            const hoverBaseY = baseWorld.y + CELL_SIZE * 1.15;
+            this.hoverDisc.position.y = hoverBaseY + Math.sin(this.elapsedTime * 4.5) * 0.045;
+            this.hoverDisc.rotation.y += dt * 1.3;
+
+            if (this.hoverColumnGlow) {
+              this.hoverColumnGlow.position.y = hoverBaseY - 0.22 + Math.sin(this.elapsedTime * 4.5) * 0.03;
+              const pulse = 0.94 + Math.sin(this.elapsedTime * 6) * 0.08;
+              this.hoverColumnGlow.scale.set(pulse, pulse, 1);
+            }
+          }
+
+          // Staggered celebratory choreography on winning 4-in-a-row discs + beam & halos
+          if (this.winningCoords.size > 0) {
+            const tSinceWin = Math.max(0, this.elapsedTime - this.winStartTime);
+            const pulse = 0.5 + 0.5 * Math.sin(this.elapsedTime * 6.5);
+
+            if (this.winLight) {
+              this.winLight.intensity = 1.9 + pulse * 1.4;
+            }
+
+            if (this.winBeamMesh && this.winBeamMesh.material) {
+              this.winBeamMesh.material.opacity = 0.55 + pulse * 0.4;
+              const beamScale = 0.92 + pulse * 0.16;
+              this.winBeamMesh.scale.set(beamScale, beamScale, 1);
+            }
+
+            this.winningList.forEach(([r, c], idx) => {
+              const key = `${r},${c}`;
+              const mesh = this.discMeshes.get(key);
+              if (mesh) {
+                const base = this.boardToWorld(r, c);
+                const stagger = idx * 0.11;
+                const localT = Math.max(0, tSinceWin - stagger);
+
+                // Initial celebratory hop + ongoing rhythmic wave
+                const hop = localT < 0.55
+                  ? Math.abs(Math.sin(localT * Math.PI * 2.2)) * Math.exp(-localT * 3.2) * 0.24
+                  : 0;
+                const wave = Math.sin(this.elapsedTime * 5.2 - idx * 0.75) * 0.045;
+
+                mesh.position.x = base.x + Math.cos(this.elapsedTime * 4.2 - idx * 0.7) * 0.022;
+                mesh.position.y = base.y + hop + wave * 0.65;
+                mesh.position.z = base.z + 0.06 + pulse * 0.085;
+
+                const popScale = 1 + (localT < 0.45 ? Math.sin((localT / 0.45) * Math.PI) * 0.14 : pulse * 0.05);
+                mesh.scale.setScalar(popScale);
+
+                if (mesh.material && mesh.material.emissive) {
+                  mesh.material.emissive.copy(mesh.material.color);
+                  mesh.material.emissiveIntensity = 0.28 + pulse * 0.42;
+                }
+              }
+            });
+
+            this.winHaloMeshes.forEach((haloObj, idx) => {
+              const haloPulse = 0.95 + Math.sin(this.elapsedTime * 5.5 - idx * 0.65) * 0.14;
+              haloObj.mesh.scale.setScalar(haloPulse);
+              haloObj.mesh.rotation.z += dt * (idx % 2 === 0 ? 1.4 : -1.4);
+              if (haloObj.mesh.material) {
+                haloObj.mesh.material.opacity = 0.45 + pulse * 0.45;
+              }
+            });
+          }
+
+          this.controls.update();
+          this.renderer.render(this.scene, this.camera);
+        }
+      }
+
+      // =======================================================================
+      // 5. APPLICATION STATE, HUD & INPUT CONTROLLER
+      // =======================================================================
+      class AppController {
+        constructor() {
+          this.sound = new SoundEngine();
+          this.engine = new Connect4Engine();
+
+          this.mode = 'bot'; // 'bot' | 'local'
+          this.difficulty = 'smart'; // 'casual' | 'smart' | 'tactical'
+          this.starterOption = '1'; // '1' | '2' | 'alternate'
+          this.atmosphere = 'midnight';
+          this.gamesPlayed = 0;
+          this.inMainMenu = true;
+
+          this.scores = {
+            p1: 0,
+            p2: 0,
+            draws: 0
+          };
+
+          this.isAnimatingMove = false;
+          this.isBotThinking = false;
+          this.isTransitioning = false;
+          this.botTimeoutId = null;
+          this.toastTimeoutId = null;
+          this.transitionTimerId = null;
+
+          this.cacheDom();
+          this.sceneCtrl = new SceneController(
+            document.getElementById('canvas-container'),
+            this.sound,
+            {
+              onSelectColumn: (col) => this.handleHumanColumnMove(col),
+              onHoverColumn: () => {}
+            }
+          );
+
+          this.bindUI();
+          this.enterMainMenu(true);
+        }
+
+        cacheDom() {
+          this.mainMenuOverlay = document.getElementById('main-menu-overlay');
+          this.menuStartBtn = document.getElementById('menu-start-btn');
+          this.menuQuickBotBtn = document.getElementById('menu-quick-bot-btn');
+          this.menuModeBotBtn = document.getElementById('menu-mode-bot');
+          this.menuModeLocalBtn = document.getElementById('menu-mode-local');
+          this.menuDiffCard = document.getElementById('menu-diff-card');
+          this.menuDiffButtons = Array.from(document.querySelectorAll('.menu-diff-btn'));
+          this.menuAtmosphereSelect = document.getElementById('menu-atmosphere-select');
+          this.menuSoundBtn = document.getElementById('menu-sound-btn');
+          this.menuSoundLabel = document.getElementById('menu-sound-label');
+
+          this.gameHudHeader = document.getElementById('game-hud-header');
+          this.gameStatusPill = document.getElementById('game-status-pill');
+          this.gameFooter = document.getElementById('game-footer');
+          this.mainMenuBtn = document.getElementById('main-menu-btn');
+
+          this.modeBotBtn = document.getElementById('mode-bot-btn');
+          this.modeLocalBtn = document.getElementById('mode-local-btn');
+          this.difficultyGroup = document.getElementById('difficulty-group');
+          this.diffButtons = Array.from(document.querySelectorAll('.diff-btn'));
+          this.starterSelect = document.getElementById('starter-select');
+          this.atmosphereSelect = document.getElementById('atmosphere-select');
+
+          this.undoBtn = document.getElementById('undo-btn');
+          this.newGameBtn = document.getElementById('new-game-btn');
+          this.resetCamBtn = document.getElementById('reset-camera-btn');
+          this.soundToggleBtn = document.getElementById('sound-toggle-btn');
+          this.soundOnIcon = document.getElementById('sound-on-icon');
+          this.soundOffIcon = document.getElementById('sound-off-icon');
+
+          this.turnDiscBadge = document.getElementById('turn-disc-badge');
+          this.turnStatusText = document.getElementById('turn-status-text');
+          this.turnSubText = document.getElementById('turn-sub-text');
+
+          this.p1Label = document.getElementById('p1-label');
+          this.p2Label = document.getElementById('p2-label');
+          this.scoreP1El = document.getElementById('score-p1');
+          this.scoreP2El = document.getElementById('score-p2');
+          this.scoreDrawsEl = document.getElementById('score-draws');
+
+          this.toastContainer = document.getElementById('toast-container');
+          this.toastMessage = document.getElementById('toast-message');
+
+          this.transitionVeil = document.getElementById('transition-veil');
+          this.transitionBadge = document.getElementById('transition-badge');
+          this.transitionLabel = document.getElementById('transition-label');
+
+          this.gameOverModal = document.getElementById('game-over-modal');
+          this.resultBadge = document.getElementById('result-badge');
+          this.resultTitle = document.getElementById('result-title');
+          this.resultSubtitle = document.getElementById('result-subtitle');
+          this.playAgainBtn = document.getElementById('play-again-btn');
+          this.resetScoresBtn = document.getElementById('reset-scores-btn');
+        }
+
+        setTransitionOverlay(active, labelText = 'Preparing Next Round...') {
+          if (!this.transitionVeil || !this.transitionBadge || !this.transitionLabel) return;
+          this.transitionLabel.textContent = labelText;
+          if (active) {
+            this.transitionVeil.classList.remove('opacity-0');
+            this.transitionVeil.classList.add('opacity-100');
+            this.transitionBadge.classList.remove('translate-y-2');
+            this.transitionBadge.classList.add('translate-y-0');
+          } else {
+            this.transitionVeil.classList.remove('opacity-100');
+            this.transitionVeil.classList.add('opacity-0');
+            this.transitionBadge.classList.remove('translate-y-0');
+            this.transitionBadge.classList.add('translate-y-2');
+          }
+        }
+
+        hideGameOverModalSmooth(onHidden) {
+          if (!this.gameOverModal || this.gameOverModal.classList.contains('hidden')) {
+            if (typeof onHidden === 'function') onHidden();
+            return;
+          }
+          const card = this.gameOverModal.firstElementChild;
+          if (!card) {
+            this.gameOverModal.classList.add('hidden');
+            if (typeof onHidden === 'function') onHidden();
+            return;
+          }
+
+          card.classList.remove('animate-pop-in');
+          card.classList.add('animate-modal-out');
+          setTimeout(() => {
+            card.classList.remove('animate-modal-out');
+            card.classList.add('animate-pop-in');
+            this.gameOverModal.classList.add('hidden');
+            if (typeof onHidden === 'function') onHidden();
+          }, 210);
+        }
+
+        showToast(msg) {
+          if (!this.toastContainer || !this.toastMessage) return;
+          this.toastMessage.textContent = msg;
+          this.toastContainer.classList.remove('hidden');
+          clearTimeout(this.toastTimeoutId);
+          this.toastTimeoutId = setTimeout(() => {
+            this.toastContainer.classList.add('hidden');
+          }, 1800);
+        }
+
+        resolveStarterPlayer() {
+          if (this.starterOption === '1') return P1;
+          if (this.starterOption === '2') return P2;
+          // Alternate starting player each game
+          return this.gamesPlayed % 2 === 0 ? P1 : P2;
+        }
+
+        enterMainMenu(initial = false) {
+          clearTimeout(this.botTimeoutId);
+          clearTimeout(this.transitionTimerId);
+          this.isBotThinking = false;
+          this.isAnimatingMove = false;
+          this.isTransitioning = false;
+          this.inMainMenu = true;
+
+          this.setTransitionOverlay(false);
+          if (this.gameOverModal) {
+            this.gameOverModal.classList.add('hidden');
+          }
+
+          this.engine.reset(P1);
+          this.sceneCtrl.clearBoardDiscs();
+          this.sceneCtrl.setInputEnabled(false);
+          this.sceneCtrl.setMenuShowcaseActive(true);
+
+          if (this.gameHudHeader) this.gameHudHeader.classList.add('hidden');
+          if (this.gameStatusPill) this.gameStatusPill.classList.add('hidden');
+          if (this.gameFooter) this.gameFooter.classList.add('hidden');
+
+          if (this.mainMenuOverlay) {
+            this.mainMenuOverlay.classList.remove('hidden');
+            requestAnimationFrame(() => {
+              this.mainMenuOverlay.classList.remove('menu-hidden');
+            });
+          }
+
+          if (!initial) {
+            this.sound.playTransitionSweep(false);
+          }
+          this.syncMenuControls();
+        }
+
+        launchFromMenu() {
+          if (this.isTransitioning) return;
+          this.sound.ensureContext();
+          this.sound.playTransitionSweep(true);
+
+          if (this.mainMenuOverlay) {
+            this.mainMenuOverlay.classList.add('menu-hidden');
+          }
+
+          if (this.gameHudHeader) this.gameHudHeader.classList.remove('hidden');
+          if (this.gameStatusPill) this.gameStatusPill.classList.remove('hidden');
+          if (this.gameFooter) this.gameFooter.classList.remove('hidden');
+
+          this.inMainMenu = false;
+          this.sceneCtrl.setMenuShowcaseActive(false);
+
+          setTimeout(() => {
+            if (this.mainMenuOverlay && !this.inMainMenu) {
+              this.mainMenuOverlay.classList.add('hidden');
+            }
+          }, 380);
+
+          this.gamesPlayed = 0;
+          const firstPlayer = this.resolveStarterPlayer();
+          this.engine.reset(firstPlayer);
+          this.sceneCtrl.clearBoardDiscs();
+          this.updateHUD();
+          this.maybeTriggerBotTurn();
+        }
+
+        syncMenuControls() {
+          if (this.menuModeBotBtn && this.menuModeLocalBtn) {
+            if (this.mode === 'bot') {
+              this.menuModeBotBtn.className =
+                'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm';
+              this.menuModeLocalBtn.className =
+                'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+              if (this.menuDiffCard) this.menuDiffCard.classList.remove('opacity-45', 'pointer-events-none');
+            } else {
+              this.menuModeLocalBtn.className =
+                'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm';
+              this.menuModeBotBtn.className =
+                'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+              if (this.menuDiffCard) this.menuDiffCard.classList.add('opacity-45', 'pointer-events-none');
+            }
+          }
+
+          this.menuDiffButtons.forEach((btn) => {
+            const active = btn.dataset.menuDiff === this.difficulty;
+            btn.className = active
+              ? 'menu-diff-btn hud-btn py-2 px-1.5 rounded-xl text-[11px] font-semibold bg-amber-500/90 text-slate-950'
+              : 'menu-diff-btn hud-btn py-2 px-1.5 rounded-xl text-[11px] font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+          });
+
+          if (this.menuAtmosphereSelect) {
+            this.menuAtmosphereSelect.value = this.atmosphere;
+          }
+          if (this.atmosphereSelect) {
+            this.atmosphereSelect.value = this.atmosphere;
+          }
+          if (this.menuSoundLabel) {
+            this.menuSoundLabel.textContent = this.sound.enabled ? 'Sound: On' : 'Sound: Off';
+          }
+        }
+
+        startNewGame(initial = false) {
+          if (this.isTransitioning || this.inMainMenu) return;
+
+          clearTimeout(this.botTimeoutId);
+          clearTimeout(this.transitionTimerId);
+          this.isBotThinking = false;
+          this.isAnimatingMove = false;
+
+          const finishSetup = () => {
+            if (!initial) {
+              this.gamesPlayed++;
+            }
+            const firstPlayer = this.resolveStarterPlayer();
+            this.engine.reset(firstPlayer);
+            this.sceneCtrl.clearBoardDiscs();
+            this.sceneCtrl.resetCamera();
+
+            this.isTransitioning = false;
+            this.setTransitionOverlay(false);
+            this.updateHUD();
+            this.maybeTriggerBotTurn();
+          };
+
+          if (initial) {
+            finishSetup();
+            return;
+          }
+
+          this.isTransitioning = true;
+          this.updateHUD();
+          this.sound.playTransitionSweep(false);
+          this.setTransitionOverlay(
+            true,
+            this.engine.gameOver ? 'Setting Up Next Match...' : 'Clearing Board...'
+          );
+
+          this.hideGameOverModalSmooth(() => {
+            this.sceneCtrl.animateClearDiscs(() => {
+              this.sound.playTransitionSweep(true);
+              this.transitionLabel.textContent = 'Ready — Fresh Rack';
+              this.transitionTimerId = setTimeout(finishSetup, 220);
+            });
+          });
+        }
+
+        setMode(newMode) {
+          if (this.mode === newMode || this.isTransitioning) return;
+          this.mode = newMode;
+
+          if (this.mode === 'bot') {
+            this.modeBotBtn.className =
+              'hud-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500 text-white shadow-sm';
+            this.modeLocalBtn.className =
+              'hud-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white';
+            this.difficultyGroup.classList.remove('hidden');
+            this.p2Label.textContent = 'Bot';
+          } else {
+            this.modeLocalBtn.className =
+              'hud-btn px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-500 text-white shadow-sm';
+            this.modeBotBtn.className =
+              'hud-btn px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white';
+            this.difficultyGroup.classList.add('hidden');
+            this.p2Label.textContent = 'P2';
+          }
+
+          this.startNewGame(false);
+        }
+
+        setDifficulty(diff) {
+          this.difficulty = diff;
+          this.diffButtons.forEach((btn) => {
+            const active = btn.dataset.diff === diff;
+            btn.className = active
+              ? 'diff-btn hud-btn px-2 py-1 rounded-lg text-xs font-semibold bg-amber-500/90 text-slate-950'
+              : 'diff-btn hud-btn px-2 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white';
+          });
+
+          if (this.mode === 'bot' && this.engine.currentPlayer === P2 && !this.engine.gameOver && !this.isAnimatingMove) {
+            this.maybeTriggerBotTurn();
+          }
+        }
+
+        isHumanTurn() {
+          if (this.inMainMenu || this.engine.gameOver || this.isAnimatingMove || this.isBotThinking || this.isTransitioning) return false;
+          if (this.mode === 'local') return true;
+          return this.engine.currentPlayer === P1;
+        }
+
+        handleHumanColumnMove(col) {
+          if (!this.isHumanTurn()) return;
+          if (this.engine.isColumnFull(col)) {
+            this.showToast(`Column ${col + 1} is full — choose another column.`);
+            return;
+          }
+          this.executeMove(col);
+        }
+
+        executeMove(col) {
+          const targetRow = this.engine.getLowestAvailableRow(this.engine.board, col);
+          if (targetRow === -1 || this.engine.gameOver) return;
+
+          const outcome = this.engine.makeMove(col);
+          if (!outcome) return;
+
+          this.isAnimatingMove = true;
+          this.updateHUD();
+
+          this.sceneCtrl.dropDisc(outcome.row, outcome.col, outcome.player, () => {
+            this.isAnimatingMove = false;
+
+            if (outcome.gameOver) {
+              this.handleGameOver(outcome);
+            } else {
+              this.updateHUD();
+              this.maybeTriggerBotTurn();
+            }
+          });
+        }
+
+        maybeTriggerBotTurn() {
+          if (this.mode !== 'bot') return;
+          if (this.engine.gameOver || this.engine.currentPlayer !== P2 || this.isAnimatingMove) return;
+
+          this.isBotThinking = true;
+          this.updateHUD();
+
+          const thinkDelay = this.difficulty === 'tactical' ? 420 : 300;
+          clearTimeout(this.botTimeoutId);
+          this.botTimeoutId = setTimeout(() => {
+            this.isBotThinking = false;
+            if (this.engine.gameOver || this.engine.currentPlayer !== P2) {
+              this.updateHUD();
+              return;
+            }
+            const botCol = this.engine.chooseBotMove(P2, this.difficulty);
+            if (botCol !== -1) {
+              this.sceneCtrl.setHoveredColumn(botCol, false);
+              this.executeMove(botCol);
+            } else {
+              this.updateHUD();
+            }
+          }, thinkDelay);
+        }
+
+        handleGameOver(outcome) {
+          if (outcome.winner === P1) {
+            this.scores.p1++;
+            this.sceneCtrl.setWinningLine(outcome.winningLine, P1);
+            this.sound.playWin();
+
+            this.resultBadge.textContent = 'Victory';
+            this.resultBadge.className =
+              'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30 mb-2';
+            this.resultTitle.textContent = this.mode === 'bot' ? 'You Win!' : 'Player 1 (Red) Wins!';
+            this.resultSubtitle.textContent = 'Four connected in a row — winning discs & beam illuminated.';
+          } else if (outcome.winner === P2) {
+            this.scores.p2++;
+            this.sceneCtrl.setWinningLine(outcome.winningLine, P2);
+            this.sound.playWin();
+
+            this.resultBadge.textContent = this.mode === 'bot' ? 'Bot Victory' : 'Victory';
+            this.resultBadge.className =
+              'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30 mb-2';
+            this.resultTitle.textContent = this.mode === 'bot' ? 'Bot Wins!' : 'Player 2 (Gold) Wins!';
+            this.resultSubtitle.textContent = 'Four connected in a row — winning discs & beam illuminated.';
+          } else {
+            this.scores.draws++;
+            this.sound.playDraw();
+
+            this.resultBadge.textContent = 'Stalemate';
+            this.resultBadge.className =
+              'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-slate-500/20 text-slate-300 border border-slate-400/30 mb-2';
+            this.resultTitle.textContent = "It's a Draw!";
+            this.resultSubtitle.textContent = 'All 42 slots filled with no four-in-a-row.';
+          }
+
+          this.updateHUD();
+          this.gameOverModal.classList.remove('hidden');
+        }
+
+        handleUndo() {
+          if (this.isAnimatingMove || this.isTransitioning || this.engine.history.length === 0) return;
+
+          clearTimeout(this.botTimeoutId);
+          this.isBotThinking = false;
+          this.sceneCtrl.clearWinEffects();
+          this.hideGameOverModalSmooth();
+
+          // In vs. Bot mode, undo back to the human's turn cleanly when possible
+          let steps = 1;
+          if (this.mode === 'bot') {
+            if (this.engine.gameOver && this.engine.winner === P2) {
+              steps = Math.min(2, this.engine.history.length);
+            } else if (this.engine.currentPlayer === P1 && this.engine.history.length >= 2) {
+              steps = 2;
+            }
+          }
+
+          this.engine.undoMove(steps);
+          this.sceneCtrl.syncBoardFromState(this.engine.board);
+          this.updateHUD();
+          this.maybeTriggerBotTurn();
+        }
+
+        updateHUD() {
+          this.scoreP1El.textContent = String(this.scores.p1);
+          this.scoreP2El.textContent = String(this.scores.p2);
+          this.scoreDrawsEl.textContent = String(this.scores.draws);
+
+          const player = this.engine.currentPlayer;
+          const isRed = player === P1;
+
+          this.turnDiscBadge.className = isRed
+            ? 'w-4 h-4 rounded-full shrink-0 bg-gradient-to-br from-rose-400 to-rose-700 ring-2 ring-rose-300/50 shadow-md transition-all duration-200'
+            : 'w-4 h-4 rounded-full shrink-0 bg-gradient-to-br from-amber-300 to-amber-600 ring-2 ring-amber-200/50 shadow-md transition-all duration-200';
+
+          if (this.isTransitioning) {
+            this.turnStatusText.textContent = 'Transitioning Board...';
+            this.turnSubText.textContent = 'Preparing next match';
+          } else if (this.engine.gameOver) {
+            if (this.engine.isDraw) {
+              this.turnStatusText.textContent = 'Game Over — Draw';
+            } else if (this.engine.winner === P1) {
+              this.turnStatusText.textContent = this.mode === 'bot' ? 'You Won!' : 'Red (P1) Won!';
+            } else {
+              this.turnStatusText.textContent = this.mode === 'bot' ? 'Bot Won!' : 'Gold (P2) Won!';
+            }
+            this.turnSubText.textContent = 'Click Play Again for another round';
+          } else if (this.isBotThinking) {
+            this.turnStatusText.textContent = `Bot (${this.difficulty}) thinking...`;
+            this.turnSubText.textContent = 'Calculating best move';
+          } else if (this.isAnimatingMove) {
+            this.turnStatusText.textContent = 'Disc dropping...';
+            this.turnSubText.textContent = 'Settling into slot';
+          } else if (this.mode === 'bot') {
+            this.turnStatusText.textContent = 'Your Turn (Red)';
+            this.turnSubText.textContent = 'Click a column or press 1–7';
+          } else {
+            this.turnStatusText.textContent = isRed ? 'Player 1 Turn (Red)' : 'Player 2 Turn (Gold)';
+            this.turnSubText.textContent = 'Pass & play — click column or press 1–7';
+          }
+
+          this.sceneCtrl.setActivePlayer(player);
+          this.sceneCtrl.setInputEnabled(this.isHumanTurn());
+          if (this.undoBtn) {
+            this.undoBtn.disabled = this.isAnimatingMove || this.isTransitioning || this.engine.history.length === 0;
+          }
+          if (this.newGameBtn) {
+            this.newGameBtn.disabled = this.isTransitioning;
+          }
+          if (this.playAgainBtn) {
+            this.playAgainBtn.disabled = this.isTransitioning;
+          }
+        }
+
+        bindUI() {
+          if (this.menuStartBtn) {
+            this.menuStartBtn.addEventListener('click', () => this.launchFromMenu());
+          }
+          if (this.menuQuickBotBtn) {
+            this.menuQuickBotBtn.addEventListener('click', () => {
+              this.mode = 'bot';
+              this.setDifficulty('tactical');
+              this.syncMenuControls();
+              this.launchFromMenu();
+            });
+          }
+          if (this.menuModeBotBtn) {
+            this.menuModeBotBtn.addEventListener('click', () => {
+              this.mode = 'bot';
+              this.p2Label.textContent = 'Bot';
+              this.difficultyGroup.classList.remove('hidden');
+              this.syncMenuControls();
+              this.sound.playSelectTick(2);
+            });
+          }
+          if (this.menuModeLocalBtn) {
+            this.menuModeLocalBtn.addEventListener('click', () => {
+              this.mode = 'local';
+              this.p2Label.textContent = 'P2';
+              this.difficultyGroup.classList.add('hidden');
+              this.syncMenuControls();
+              this.sound.playSelectTick(4);
+            });
+          }
+          this.menuDiffButtons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+              this.setDifficulty(btn.dataset.menuDiff);
+              this.syncMenuControls();
+              this.sound.playSelectTick(3);
+            });
+          });
+          if (this.menuAtmosphereSelect) {
+            this.menuAtmosphereSelect.addEventListener('change', (e) => {
+              this.atmosphere = e.target.value;
+              this.sceneCtrl.setAtmosphere(this.atmosphere);
+              this.syncMenuControls();
+              this.sound.playSelectTick(5);
+            });
+          }
+          if (this.menuSoundBtn) {
+            this.menuSoundBtn.addEventListener('click', () => {
+              const next = !this.sound.enabled;
+              this.sound.setEnabled(next);
+              if (this.soundOnIcon) this.soundOnIcon.classList.toggle('hidden', !next);
+              if (this.soundOffIcon) this.soundOffIcon.classList.toggle('hidden', next);
+              this.syncMenuControls();
+              if (next) this.sound.playSelectTick(5);
+            });
+          }
+          if (this.mainMenuBtn) {
+            this.mainMenuBtn.addEventListener('click', () => this.enterMainMenu(false));
+          }
+
+          if (this.modeBotBtn) {
+            this.modeBotBtn.addEventListener('click', () => this.setMode('bot'));
+          }
+          if (this.modeLocalBtn) {
+            this.modeLocalBtn.addEventListener('click', () => this.setMode('local'));
+          }
+
+          this.diffButtons.forEach((btn) => {
+            btn.addEventListener('click', () => this.setDifficulty(btn.dataset.diff));
+          });
+
+          if (this.starterSelect) {
+            this.starterSelect.addEventListener('change', (e) => {
+              this.starterOption = e.target.value;
+              this.gamesPlayed = 0;
+              this.startNewGame(true);
+            });
+          }
+
+          if (this.atmosphereSelect) {
+            this.atmosphereSelect.addEventListener('change', (e) => {
+              this.atmosphere = e.target.value;
+              this.sceneCtrl.setAtmosphere(this.atmosphere);
+              const preset = ATMOSPHERES[this.atmosphere] || ATMOSPHERES.midnight;
+              this.showToast(`Atmosphere: ${preset.label}`);
+              this.sound.playSelectTick(4);
+            });
+          }
+
+          if (this.undoBtn) {
+            this.undoBtn.addEventListener('click', () => this.handleUndo());
+          }
+          if (this.newGameBtn) {
+            this.newGameBtn.addEventListener('click', () => this.startNewGame(false));
+          }
+          if (this.playAgainBtn) {
+            this.playAgainBtn.addEventListener('click', () => this.startNewGame(false));
+          }
+
+          if (this.resetScoresBtn) {
+            this.resetScoresBtn.addEventListener('click', () => {
+              if (this.isTransitioning) return;
+              this.scores = { p1: 0, p2: 0, draws: 0 };
+              this.gamesPlayed = 0;
+              this.updateHUD();
+              this.startNewGame(false);
+            });
+          }
+
+          if (this.resetCamBtn) {
+            this.resetCamBtn.addEventListener('click', () => {
+              this.sceneCtrl.resetCamera();
+              this.sound.playSelectTick(3);
+            });
+          }
+
+          if (this.soundToggleBtn) {
+            this.soundToggleBtn.addEventListener('click', () => {
+              const next = !this.sound.enabled;
+              this.sound.setEnabled(next);
+              if (this.soundOnIcon) this.soundOnIcon.classList.toggle('hidden', !next);
+              if (this.soundOffIcon) this.soundOffIcon.classList.toggle('hidden', next);
+              if (next) {
+                this.sound.playSelectTick(5);
+              }
+            });
+          }
+
+          // Keyboard navigation: Left/Right arrows, 1-7 column keys, Enter/Space to drop
+          window.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT')) {
+              return;
+            }
+
+            if (this.inMainMenu) {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.launchFromMenu();
+              }
+              return;
+            }
+
+            if (e.key === 'ArrowLeft') {
+              e.preventDefault();
+              const prev = (this.sceneCtrl.hoveredCol - 1 + COLS) % COLS;
+              this.sceneCtrl.setHoveredColumn(prev, true);
+            } else if (e.key === 'ArrowRight') {
+              e.preventDefault();
+              const next = (this.sceneCtrl.hoveredCol + 1) % COLS;
+              this.sceneCtrl.setHoveredColumn(next, true);
+            } else if (e.key >= '1' && e.key <= '7') {
+              e.preventDefault();
+              const col = Number(e.key) - 1;
+              this.sceneCtrl.setHoveredColumn(col, true);
+              if (this.isHumanTurn()) {
+                this.handleHumanColumnMove(col);
+              }
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              if (!this.gameOverModal.classList.contains('hidden')) {
+                e.preventDefault();
+                this.startNewGame(false);
+                return;
+              }
+              if (this.isHumanTurn()) {
+                e.preventDefault();
+                this.handleHumanColumnMove(this.sceneCtrl.hoveredCol);
+              }
+            }
+          });
+        }
+      }
+
+      // Initialize application when DOM is ready
+      window.addEventListener('DOMContentLoaded', () => {
+        new AppController();
+      });
+    })();
+  </script>
+  <script type="module" src="../../account-activity.js"></script>
+</body>
+</html>

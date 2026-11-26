@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091512">
+  <title>Local Player Profiles · Koops Games</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hub.css">
+  <link rel="stylesheet" href="account.css">
+</head>
+<body>
+  <main class="hub-shell account-shell">
+    <header class="hub-header">
+      <a class="brand" href="index.html" aria-label="Koops Games home"><span class="brand-mark">K</span><span>KOOPS GAMES <small>LOCAL PLAYER PROFILES</small></span></a>
+      <div class="hub-status"><a class="account-back-link" href="index.html">Game hub</a><button class="theme-toggle" type="button">☼ Light mode</button></div>
+    </header>
+
+    <section class="account-intro">
+      <p class="eyebrow">YOUR GAMES, YOUR PROFILE</p>
+      <h1>Player <span>profiles.</span></h1>
+      <p class="intro">Create a profile in this browser to keep track of your game sessions.</p>
+    </section>
+
+    <section class="account-notice" aria-live="polite">
+      <strong>Temporary local profiles</strong>
+      <p>Profiles and activity stay in this browser only. There is no password or online account security; anyone using this browser can open a profile. Don’t store private information here. Browser data does not sync to other devices and can be cleared by the browser.</p>
+    </section>
+
+    <section id="auth-panel" class="account-panel auth-panel hidden" aria-labelledby="auth-title">
+      <div class="auth-heading">
+        <p class="eyebrow">WELCOME TO THE TABLE</p>
+        <h2 id="auth-title">Open a local profile</h2>
+        <p>Use a username to switch between profiles saved in this browser. No email or password is collected.</p>
+      </div>
+      <div class="auth-columns">
+        <form id="sign-in-form" class="auth-form">
+          <h3>Sign in</h3>
+          <label>Username<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="18" pattern="[A-Za-z0-9_]{3,18}" placeholder="your_username"></label>
+          <button class="primary-button" type="submit">Open profile</button>
+        </form>
+        <form id="create-profile-form" class="auth-form">
+          <h3>Create profile</h3>
+          <label>Display name<input name="displayName" type="text" autocomplete="nickname" required minlength="2" maxlength="24" placeholder="How you appear"></label>
+          <label>Username<input name="username" type="text" autocomplete="username" required minlength="3" maxlength="18" pattern="[A-Za-z0-9_]{3,18}" placeholder="letters, numbers, underscore"></label>
+          <button class="primary-button" type="submit">Create local profile</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="account-app" class="account-app hidden">
+      <div class="account-topline">
+        <div><p class="eyebrow">CURRENT LOCAL PROFILE</p><h2 id="account-greeting">Player</h2><p id="account-handle" class="handle-text"></p></div>
+        <div class="inline-actions"><button id="sign-out-button" class="secondary-button" type="button">Sign out</button><button id="delete-profile-button" class="text-button danger-text" type="button">Delete local profile</button></div>
+      </div>
+
+      <div class="account-layout">
+        <div class="account-main-column">
+          <section class="account-panel profile-panel" aria-labelledby="my-profile-title">
+            <div class="panel-heading"><div><p class="eyebrow">YOUR PROFILE</p><h2 id="my-profile-title">Player card</h2></div><div id="my-avatar" class="player-avatar" aria-hidden="true">K</div></div>
+            <div class="profile-fields single-field">
+              <label>Display name<input id="settings-display-name" type="text" minlength="2" maxlength="24"></label>
+            </div>
+            <p class="privacy-note">This profile is stored on this device only. Online search, friends, and sharing are unavailable in local mode.</p>
+            <button id="save-settings-button" class="primary-button" type="button">Save profile</button>
+          </section>
+        </div>
+
+        <aside class="account-side-column">
+          <section class="account-panel stats-panel" aria-labelledby="my-stats-title">
+            <div class="panel-heading"><div><p class="eyebrow">YOUR RECENT PLAY</p><h2 id="my-stats-title">Statistics</h2></div></div>
+            <div id="my-stats" class="stats-grid"><div class="stat-tile"><strong>0</strong><span>Saved sessions</span></div><div class="stat-tile"><strong>0 min</strong><span>Play time</span></div></div>
+            <div id="my-most-played" class="most-played"></div>
+            <h3 class="subheading">Recent activity</h3>
+            <div id="my-activity" class="activity-list"><p class="empty-copy">Play a game while signed in to save local activity.</p></div>
+            <p class="field-hint">Session activity is stored locally and is self-reported, not a verified score.</p>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <div id="account-toast" class="account-toast hidden" role="status" aria-live="polite"></div>
+    <footer class="hub-footer"><span>KOOPS GAMES</span><span>Play together, keep it kind</span></footer>
+  </main>
+  <script src="theme.js"></script>
+  <script type="module" src="account.js"></script>
+</body>
+</html>

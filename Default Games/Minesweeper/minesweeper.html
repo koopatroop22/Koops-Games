@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EOD // TACTICAL 3D MINESWEEPER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0e11;
+            font-family: 'Inter', sans-serif;
+            color: #e2e8f0;
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: crosshair;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .hud-panel {
+            background: rgba(13, 18, 24, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+        .hud-btn {
+            transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .hud-btn:hover {
+            background: rgba(51, 65, 85, 0.65);
+            border-color: rgba(245, 158, 11, 0.5);
+            transform: translateY(-1px);
+        }
+        .hud-btn:active {
+            transform: translateY(1px);
+        }
+        .hud-btn-active {
+            background: rgba(245, 158, 11, 0.22) !important;
+            border-color: #f59e0b !important;
+            color: #fbbf24 !important;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+        }
+        .hud-btn-flag-active {
+            background: rgba(239, 68, 68, 0.25) !important;
+            border-color: #ef4444 !important;
+            color: #fca5a5 !important;
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
+        }
+        .scanline-overlay {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.12) 50%,
+                rgba(0,0,0,0.12)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.45; }
+        }
+        .led-pulse {
+            animation: pulseGlow 1.6s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body data-game-id="minesweeper" oncontextmenu="return false;">
+
+    <!-- 3D Viewport Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Subtle Tactical Scanline Vignette -->
+    <div class="fixed inset-0 pointer-events-none z-10 scanline-overlay opacity-40"></div>
+    <div class="fixed inset-0 pointer-events-none z-10" style="background: radial-gradient(circle at center, transparent 55%, rgba(5, 8, 12, 0.65) 100%);"></div>
+
+    <!-- Top Tactical HUD Bar -->
+    <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        
+        <!-- Left: Mission Title & Telemetry Counters -->
+        <div class="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+            <div class="hud-panel rounded-xl px-3.5 py-2 flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 led-pulse shadow-[0_0_8px_#f59e0b]"></span>
+                    <div class="hidden sm:block">
+                        <div class="text-[10px] font-mono-tech tracking-widest text-amber-400/90 uppercase leading-none">EOD UNIT // 07</div>
+                        <div class="text-xs font-bold tracking-wider text-slate-100 uppercase mt-0.5">ORDNANCE SWEEP</div>
+                    </div>
+                </div>
+
+                <div class="h-7 w-px bg-slate-700/70 hidden sm:block"></div>
+
+                <!-- Mines Remaining -->
+                <div class="flex flex-col items-end bg-slate-950/75 border border-slate-800 rounded-lg px-2.5 py-1 min-w-[74px]">
+                    <span class="text-[9px] font-mono-tech uppercase tracking-wider text-slate-400">MINES</span>
+                    <span id="mine-counter" class="font-mono-tech text-base sm:text-lg font-extrabold text-red-400 tracking-wider leading-tight">010</span>
+                </div>
+
+                <!-- Timer -->
+                <div class="flex flex-col items-end bg-slate-950/75 border border-slate-800 rounded-lg px-2.5 py-1 min-w-[78px]">
+                    <span class="text-[9px] font-mono-tech uppercase tracking-wider text-slate-400">TIME</span>
+                    <span id="timer-display" class="font-mono-tech text-base sm:text-lg font-extrabold text-amber-400 tracking-wider leading-tight">000</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center/Right: Difficulty & Controls -->
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 pointer-events-auto">
+            
+            <!-- Difficulty Selector -->
+            <div class="hud-panel rounded-xl p-1 flex items-center gap-1">
+                <button id="diff-beginner" onclick="game.setDifficulty('beginner')" class="hud-btn hud-btn-active px-2.5 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-transparent text-slate-300">
+                    9×9
+                </button>
+                <button id="diff-intermediate" onclick="game.setDifficulty('intermediate')" class="hud-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-transparent text-slate-300">
+                    16×16
+                </button>
+                <button id="diff-expert" onclick="game.setDifficulty('expert')" class="hud-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-transparent text-slate-300">
+                    24×16
+                </button>
+            </div>
+
+            <!-- Action Tools -->
+            <div class="hud-panel rounded-xl p-1 flex items-center gap-1">
+                <!-- Dig / Flag Mode Toggle -->
+                <button id="btn-mode-toggle" onclick="game.toggleInputMode()" title="Toggle Dig / Beacon Flag Mode (or Shift+Click / Right-Click)" class="hud-btn px-3 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-slate-700/70 bg-slate-900/60 text-slate-200 flex items-center gap-1.5">
+                    <span id="mode-icon">⛏️</span>
+                    <span id="mode-label">DIG</span>
+                </button>
+
+                <!-- Camera Reset -->
+                <button onclick="game.resetCamera()" title="Reset Tactical Camera View" class="hud-btn p-2 rounded-lg border border-slate-700/70 bg-slate-900/60 text-slate-200 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                </button>
+
+                <!-- Audio Mute Toggle -->
+                <button id="btn-mute" onclick="game.toggleMute()" title="Toggle Synthesized Audio" class="hud-btn p-2 rounded-lg border border-slate-700/70 bg-slate-900/60 text-slate-200 flex items-center justify-center">
+                    <svg id="icon-sound-on" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                    </svg>
+                    <svg id="icon-sound-off" class="w-4 h-4 text-slate-500 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path>
+                    </svg>
+                </button>
+
+                <!-- Restart / New Mission -->
+                <button onclick="game.resetGame()" title="Deploy New Minefield" class="hud-btn px-3 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span class="hidden md:inline">REDEPLOY</span>
+                </button>
+                <a href="../../index.html" title="Return to Koops Games" class="hud-btn px-3 py-1.5 rounded-lg text-xs font-mono-tech font-bold uppercase tracking-wider border border-slate-600/70 bg-slate-900/70 text-slate-200 no-underline">GAME HUB</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bottom Controls Hint Bar -->
+    <footer class="fixed bottom-3 left-3 right-3 z-20 flex justify-center pointer-events-none">
+        <div class="hud-panel rounded-full px-4 py-1.5 text-[11px] font-mono-tech text-slate-300/90 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <span><strong class="text-amber-400">L-CLICK</strong> Excavate / Chord</span>
+            <span class="text-slate-600">•</span>
+            <span><strong class="text-red-400">R-CLICK / SHIFT</strong> Beacon Flag</span>
+            <span class="text-slate-600">•</span>
+            <span><strong class="text-cyan-400">R-DRAG / MIDDLE</strong> Orbit View</span>
+            <span class="text-slate-600">•</span>
+            <span><strong class="text-emerald-400">SCROLL</strong> Zoom</span>
+        </div>
+    </footer>
+
+    <!-- Mission Complete / Failed Modal Overlay -->
+    <div id="endgame-modal" class="fixed inset-0 z-30 hidden items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm transition-opacity duration-300">
+        <div class="hud-panel rounded-2xl max-w-md w-full p-6 border border-slate-700/80 shadow-2xl transform transition-all">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                    <span id="modal-status-dot" class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]"></span>
+                    <span id="modal-subtitle" class="text-xs font-mono-tech uppercase tracking-widest text-emerald-400">SECTOR SECURED</span>
+                </div>
+                <span class="text-xs font-mono-tech text-slate-500">EOD-LOG</span>
+            </div>
+
+            <h2 id="modal-title" class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white uppercase mb-2">
+                ORDNANCE NEUTRALIZED
+            </h2>
+            <p id="modal-desc" class="text-sm text-slate-300 mb-6 leading-relaxed">
+                All explosive devices in the sector have been safely isolated and marked.
+            </p>
+
+            <!-- Telemetry Stats -->
+            <div class="grid grid-cols-3 gap-2.5 mb-6">
+                <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 text-center">
+                    <div class="text-[10px] font-mono-tech text-slate-400 uppercase">TIME</div>
+                    <div id="stat-time" class="text-lg font-mono-tech font-bold text-amber-400 mt-0.5">042s</div>
+                </div>
+                <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 text-center">
+                    <div class="text-[10px] font-mono-tech text-slate-400 uppercase">CLEARED</div>
+                    <div id="stat-cleared" class="text-lg font-mono-tech font-bold text-cyan-400 mt-0.5">100%</div>
+                </div>
+                <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 text-center">
+                    <div class="text-[10px] font-mono-tech text-slate-400 uppercase">MINES</div>
+                    <div id="stat-mines" class="text-lg font-mono-tech font-bold text-red-400 mt-0.5">10/10</div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="game.hideModal()" class="hud-btn flex-1 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-900/70 text-xs font-mono-tech font-bold uppercase tracking-wider text-slate-300">
+                    INSPECT FIELD
+                </button>
+                <button onclick="game.resetGame()" class="hud-btn flex-1 py-2.5 px-4 rounded-xl border border-amber-500/60 bg-amber-500 text-slate-950 text-xs font-mono-tech font-extrabold uppercase tracking-wider hover:bg-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.35)]">
+                    NEXT MISSION
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /**
+     * ============================================================================
+     * PROCEDURAL PBR TEXTURE GENERATOR
+     * Generates realistic normal/bump maps, roughness maps, brushed steel,
+     * weathered desert/tactical terrain, hazard stripes, and military stencils.
+     * ============================================================================
+     */
+    class ProceduralTextures {
+        static createBrushedSteel() {
+            const size = 512;
+            const albedoCanvas = document.createElement('canvas');
+            const bumpCanvas = document.createElement('canvas');
+            const roughCanvas = document.createElement('canvas');
+            albedoCanvas.width = bumpCanvas.width = roughCanvas.width = size;
+            albedoCanvas.height = bumpCanvas.height = roughCanvas.height = size;
+
+            const aCtx = albedoCanvas.getContext('2d');
+            const bCtx = bumpCanvas.getContext('2d');
+            const rCtx = roughCanvas.getContext('2d');
+
+            // Base steel dark olive-slate tone
+            aCtx.fillStyle = '#3b434b';
+            aCtx.fillRect(0, 0, size, size);
+            bCtx.fillStyle = '#808080';
+            bCtx.fillRect(0, 0, size, size);
+            rCtx.fillStyle = '#707070';
+            rCtx.fillRect(0, 0, size, size);
+
+            // Brushed directional scratches
+            for (let i = 0; i < 3200; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                const len = 15 + Math.random() * 65;
+                const alpha = 0.03 + Math.random() * 0.06;
+                const bright = Math.random() > 0.5;
+
+                aCtx.strokeStyle = bright ? `rgba(210,225,240,${alpha})` : `rgba(15,20,25,${alpha})`;
+                aCtx.lineWidth = 1 + Math.random();
+                aCtx.beginPath();
+                aCtx.moveTo(x, y);
+                aCtx.lineTo(x + len, y + (Math.random() - 0.5) * 2);
+                aCtx.stroke();
+
+                bCtx.strokeStyle = bright ? `rgba(220,220,220,${alpha * 2})` : `rgba(40,40,40,${alpha * 2})`;
+                bCtx.beginPath();
+                bCtx.moveTo(x, y);
+                bCtx.lineTo(x + len, y);
+                bCtx.stroke();
+
+                rCtx.strokeStyle = bright ? `rgba(90,90,90,${alpha * 2})` : `rgba(170,170,170,${alpha * 2})`;
+                rCtx.beginPath();
+                rCtx.moveTo(x, y);
+                rCtx.lineTo(x + len, y);
+                rCtx.stroke();
+            }
+
+            // Subtle beveled plate panel border & corner rivets
+            aCtx.strokeStyle = 'rgba(20, 26, 32, 0.7)';
+            aCtx.lineWidth = 14;
+            aCtx.strokeRect(7, 7, size - 14, size - 14);
+
+            aCtx.strokeStyle = 'rgba(180, 195, 210, 0.22)';
+            aCtx.lineWidth = 4;
+            aCtx.strokeRect(16, 16, size - 32, size - 32);
+
+            bCtx.strokeStyle = '#303030';
+            bCtx.lineWidth = 12;
+            bCtx.strokeRect(8, 8, size - 16, size - 16);
+
+            // Diagonal subtle tactical cross-brace indents
+            aCtx.strokeStyle = 'rgba(25, 32, 38, 0.25)';
+            aCtx.lineWidth = 6;
+            aCtx.beginPath();
+            aCtx.moveTo(45, 45);
+            aCtx.lineTo(size - 45, size - 45);
+            aCtx.moveTo(size - 45, 45);
+            aCtx.lineTo(45, size - 45);
+            aCtx.stroke();
+
+            // Corner bolts
+            const bolts = [[38, 38], [size - 38, 38], [38, size - 38], [size - 38, size - 38]];
+            bolts.forEach(([bx, by]) => {
+                aCtx.fillStyle = '#232930';
+                aCtx.beginPath();
+                aCtx.arc(bx, by, 14, 0, Math.PI * 2);
+                aCtx.fill();
+
+                aCtx.fillStyle = '#5c6875';
+                aCtx.beginPath();
+                aCtx.arc(bx - 1, by - 1, 9, 0, Math.PI * 2);
+                aCtx.fill();
+
+                bCtx.fillStyle = '#ffffff';
+                bCtx.beginPath();
+                bCtx.arc(bx, by, 11, 0, Math.PI * 2);
+                bCtx.fill();
+            });
+
+            const map = new THREE.CanvasTexture(albedoCanvas);
+            const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+            const roughnessMap = new THREE.CanvasTexture(roughCanvas);
+            map.anisotropy = 4;
+            return { map, bumpMap, roughnessMap };
+        }
+
+        static createExcavatedPit() {
+            const size = 512;
+            const canvas = document.createElement('canvas');
+            const bump = document.createElement('canvas');
+            canvas.width = bump.width = size;
+            canvas.height = bump.height = size;
+            const ctx = canvas.getContext('2d');
+            const bCtx = bump.getContext('2d');
+
+            // Dark compacted tactical soil & steel grating base
+            ctx.fillStyle = '#1b2026';
+            ctx.fillRect(0, 0, size, size);
+            bCtx.fillStyle = '#808080';
+            bCtx.fillRect(0, 0, size, size);
+
+            // Granular dirt & gravel noise
+            for (let i = 0; i < 6500; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                const r = 1 + Math.random() * 3.2;
+                const shade = 22 + Math.floor(Math.random() * 26);
+                ctx.fillStyle = `rgb(${shade}, ${shade + 3}, ${shade + 6})`;
+                ctx.fillRect(x, y, r, r);
+
+                const bShade = 90 + Math.floor(Math.random() * 85);
+                bCtx.fillStyle = `rgb(${bShade}, ${bShade}, ${bShade})`;
+                bCtx.fillRect(x, y, r, r);
+            }
+
+            // Inner recessed perimeter shadow
+            const grad = ctx.createRadialGradient(size/2, size/2, size*0.28, size/2, size/2, size*0.52);
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(1, 'rgba(0,0,0,0.65)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+
+            // Subtle tactical grid crosshair on pit floor
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(24, 24, size - 48, size - 48);
+
+            const map = new THREE.CanvasTexture(canvas);
+            const bumpMap = new THREE.CanvasTexture(bump);
+            map.anisotropy = 4;
+            return { map, bumpMap };
+        }
+
+        static createNumberTexture(num) {
+            const size = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, size, size);
+
+            const palette = {
+                1: { main: '#38bdf8', glow: 'rgba(56, 189, 248, 0.45)' },  // Tactical Cyan
+                2: { main: '#4ade80', glow: 'rgba(74, 222, 128, 0.45)' },  // Radar Green
+                3: { main: '#f87171', glow: 'rgba(248, 113, 113, 0.48)' }, // Alert Red
+                4: { main: '#a78bfa', glow: 'rgba(167, 139, 250, 0.45)' }, // Violet
+                5: { main: '#fb923c', glow: 'rgba(251, 146, 60, 0.48)' },  // Hazard Orange
+                6: { main: '#2dd4bf', glow: 'rgba(45, 212, 191, 0.45)' },  // Teal
+                7: { main: '#facc15', glow: 'rgba(250, 204, 21, 0.50)' },  // High-Vis Yellow
+                8: { main: '#f43f5e', glow: 'rgba(244, 63, 94, 0.55)' }    // Critical Crimson
+            };
+
+            const col = palette[num] || palette[1];
+
+            // Outer stencil ring
+            ctx.strokeStyle = col.main;
+            ctx.globalAlpha = 0.28;
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, 175, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+
+            // Stencil number text
+            ctx.save();
+            ctx.font = '800 285px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.shadowColor = col.glow;
+            ctx.shadowBlur = 24;
+            ctx.fillStyle = col.main;
+            ctx.fillText(String(num), size / 2, size / 2 + 16);
+            ctx.restore();
+
+            // Military stencil cut lines (horizontal slits for realistic spray-paint look)
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(90, size / 2 - 4, size - 180, 7);
+
+            // Subtle weathered paint distress speckles
+            for (let i = 0; i < 450; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                const r = 1 + Math.random() * 3.5;
+                ctx.fillStyle = `rgba(0,0,0,${0.25 + Math.random() * 0.55})`;
+                ctx.fillRect(x, y, r, r);
+            }
+            ctx.globalCompositeOperation = 'source-over';
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        static createHazardStripeTexture() {
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(0, 0, size, size);
+
+            ctx.fillStyle = '#18181b';
+            const stripeW = 32;
+            for (let i = -size; i < size * 2; i += stripeW * 2) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i + stripeW, 0);
+                ctx.lineTo(i + stripeW - size, size);
+                ctx.lineTo(i - size, size);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // Grunge dirt overlay
+            for (let i = 0; i < 1400; i++) {
+                ctx.fillStyle = `rgba(15, 15, 15, ${Math.random() * 0.25})`;
+                ctx.fillRect(Math.random() * size, Math.random() * size, 3, 3);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 1);
+            return tex;
+        }
+
+        static createConcreteTerrain() {
+            const size = 1024;
+            const canvas = document.createElement('canvas');
+            const bump = document.createElement('canvas');
+            canvas.width = bump.width = size;
+            canvas.height = bump.height = size;
+            const ctx = canvas.getContext('2d');
+            const bCtx = bump.getContext('2d');
+
+            ctx.fillStyle = '#252b31';
+            ctx.fillRect(0, 0, size, size);
+            bCtx.fillStyle = '#808080';
+            bCtx.fillRect(0, 0, size, size);
+
+            for (let i = 0; i < 18000; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                const s = 1 + Math.random() * 3;
+                const v = 30 + Math.floor(Math.random() * 24);
+                ctx.fillStyle = `rgb(${v},${v+2},${v+5})`;
+                ctx.fillRect(x, y, s, s);
+
+                const bv = 105 + Math.floor(Math.random() * 45);
+                bCtx.fillStyle = `rgb(${bv},${bv},${bv})`;
+                bCtx.fillRect(x, y, s, s);
+            }
+
+            // Subtle expansion joint grid lines
+            ctx.strokeStyle = 'rgba(10, 14, 18, 0.55)';
+            ctx.lineWidth = 3;
+            for (let g = 0; g <= size; g += 256) {
+                ctx.beginPath();
+                ctx.moveTo(g, 0);
+                ctx.lineTo(g, size);
+                ctx.moveTo(0, g);
+                ctx.lineTo(size, g);
+                ctx.stroke();
+            }
+
+            const map = new THREE.CanvasTexture(canvas);
+            const bumpMap = new THREE.CanvasTexture(bump);
+            map.wrapS = map.wrapT = bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            map.repeat.set(4, 4);
+            bumpMap.repeat.set(4, 4);
+            return { map, bumpMap };
+        }
+    }
+
+    /**
+     * ============================================================================
+     * TACTICAL WEB AUDIO SYNTHESIZER
+     * Zero external sound files. Synthesizes mechanical clacks, radar pings,
+     * beacon stake thuds, multi-layered explosions, and victory chimes.
+     * ============================================================================
+     */
+    class SoundFX {
+        constructor() {
+            this.ctx = null;
+            this.muted = false;
+        }
+
+        init() {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    this.ctx = new AudioCtx();
+                }
+            }
+            if (this.ctx && this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        }
+
+        toggleMute() {
+            this.muted = !this.muted;
+            return this.muted;
+        }
+
+        playDig(pitchOffset = 0) {
+            if (this.muted) return;
+            this.init();
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Heavy metallic hatch release thud
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            const baseFreq = 135 + pitchOffset * 14 + (Math.random() * 12 - 6);
+            osc.frequency.setValueAtTime(baseFreq, now);
+            osc.frequency.exponentialRampToValueAtTime(38, now + 0.11);
+
+            gain.gain.setValueAtTime(0.22, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.12);
+
+            // Crisp mechanical latch click
+            const clickOsc = this.ctx.createOscillator();
+            const clickGain = this.ctx.createGain();
+            clickOsc.type = 'sine';
+            clickOsc.frequency.setValueAtTime(880 + pitchOffset * 35, now);
+            clickOsc.frequency.exponentialRampToValueAtTime(240, now + 0.035);
+
+            clickGain.gain.setValueAtTime(0.09, now);
+            clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+            clickOsc.connect(clickGain);
+            clickGain.connect(this.ctx.destination);
+            clickOsc.start(now);
+            clickOsc.stop(now + 0.04);
+        }
+
+        playFlag(planted = true) {
+            if (this.muted) return;
+            this.init();
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // Stake impact thud
+            const thud = this.ctx.createOscillator();
+            const thudGain = this.ctx.createGain();
+            thud.type = 'sine';
+            thud.frequency.setValueAtTime(planted ? 180 : 120, now);
+            thud.frequency.exponentialRampToValueAtTime(45, now + 0.09);
+            thudGain.gain.setValueAtTime(0.25, now);
+            thudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            thud.connect(thudGain);
+            thudGain.connect(this.ctx.destination);
+            thud.start(now);
+            thud.stop(now + 0.1);
+
+            // Tactical transponder chirp
+            const beep = this.ctx.createOscillator();
+            const beepGain = this.ctx.createGain();
+            beep.type = 'sawtooth';
+            const f1 = planted ? 740 : 520;
+            const f2 = planted ? 1110 : 360;
+            beep.frequency.setValueAtTime(f1, now + 0.02);
+            beep.frequency.setValueAtTime(f2, now + 0.07);
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(2200, now);
+
+            beepGain.gain.setValueAtTime(0.08, now + 0.02);
+            beepGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+            beep.connect(filter);
+            filter.connect(beepGain);
+            beepGain.connect(this.ctx.destination);
+            beep.start(now + 0.02);
+            beep.stop(now + 0.16);
+        }
+
+        playExplosion() {
+            if (this.muted) return;
+            this.init();
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+
+            // 1. Sub-bass shockwave boom
+            const sub = this.ctx.createOscillator();
+            const subGain = this.ctx.createGain();
+            sub.type = 'sine';
+            sub.frequency.setValueAtTime(115, now);
+            sub.frequency.exponentialRampToValueAtTime(22, now + 1.15);
+
+            subGain.gain.setValueAtTime(0.65, now);
+            subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.25);
+
+            sub.connect(subGain);
+            subGain.connect(this.ctx.destination);
+            sub.start(now);
+            sub.stop(now + 1.3);
+
+            // 2. Filtered white noise blast & debris rumble
+            const bufferSize = this.ctx.sampleRate * 1.6;
+            const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.42));
+            }
+
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = noiseBuffer;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1400, now);
+            filter.frequency.exponentialRampToValueAtTime(140, now + 1.4);
+
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.55, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.55);
+
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(this.ctx.destination);
+            noise.start(now);
+        }
+
+        playVictory() {
+            if (this.muted) return;
+            this.init();
+            if (!this.ctx) return;
+
+            const now = this.ctx.currentTime;
+            const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+
+            notes.forEach((freq, idx) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                const startTime = now + idx * 0.11;
+                osc.frequency.setValueAtTime(freq, startTime);
+
+                gain.gain.setValueAtTime(0.001, startTime);
+                gain.gain.linearRampToValueAtTime(0.16, startTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.55);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(startTime);
+                osc.stop(startTime + 0.6);
+            });
+        }
+    }
+
+    /**
+     * ============================================================================
+     * MAIN 3D TACTICAL MINESWEEPER ENGINE
+     * ============================================================================
+     */
+    class TacticalMinesweeper3D {
+        constructor() {
+            this.container = document.getElementById('canvas-container');
+            this.sfx = new SoundFX();
+
+            // Difficulty configurations
+            this.difficulties = {
+                beginner:     { rows: 9,  cols: 9,  mines: 10, camDist: 12.5 },
+                intermediate: { rows: 16, cols: 16, mines: 40, camDist: 19.5 },
+                expert:       { rows: 16, cols: 24, mines: 75, camDist: 23.5 }
+            };
+            this.currentDifficulty = 'beginner';
+
+            // Game state
+            this.rows = 9;
+            this.cols = 9;
+            this.totalMines = 10;
+            this.grid = [];
+            this.state = 'ready'; // 'ready' | 'playing' | 'won' | 'lost'
+            this.firstClickDone = false;
+            this.flagsPlaced = 0;
+            this.revealedCount = 0;
+            this.elapsedSeconds = 0;
+            this.timerInterval = null;
+            this.inputMode = 'dig'; // 'dig' | 'flag'
+
+            // Tile layout metrics
+            this.tileSize = 1.0;
+            this.tileGap = 0.08;
+            this.step = this.tileSize + this.tileGap;
+
+            // Camera orbit state
+            this.camSpherical = {
+                radius: 12.5,
+                theta: 0,           // Horizontal orbit angle
+                phi: Math.PI * 0.26 // Elevation angle from vertical
+            };
+            this.camTarget = new THREE.Vector3(0, 0, 0);
+            this.isOrbiting = false;
+            this.pointerDownPos = { x: 0, y: 0 };
+            this.lastPointerPos = { x: 0, y: 0 };
+            this.pointerMoved = false;
+
+            // Visual FX pools
+            this.particles = [];
+            this.shockwaves = [];
+            this.cameraShake = 0;
+            this.hoveredTile = null;
+            this.scanWaveTime = -1;
+
+            this.initThree();
+            this.initMaterials();
+            this.buildEnvironment();
+            this.bindEvents();
+            this.resetGame();
+
+            this.clock = new THREE.Clock();
+            this.animate = this.animate.bind(this);
+        }
+
+        initThree() {
+            this.scene = new THREE.Scene();
+            this.scene.background = new THREE.Color(0x0b0f14);
+            this.scene.fog = new THREE.FogExp2(0x0b0f14, 0.016);
+
+            const width = this.container.clientWidth || window.innerWidth;
+            const height = this.container.clientHeight || window.innerHeight;
+
+            this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 150);
+            this.updateCameraTransform();
+
+            this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            this.renderer.setSize(width, height);
+            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.12;
+
+            this.container.appendChild(this.renderer.domElement);
+
+            // Lighting Rig: Warm Tactical Sunlight + Cool Rim + Ambient + Explosion Flash
+            const hemiLight = new THREE.HemisphereLight(0x94a3b8, 0x1e293b, 0.72);
+            this.scene.add(hemiLight);
+
+            this.sunLight = new THREE.DirectionalLight(0xfff1dc, 1.45);
+            this.sunLight.position.set(14, 24, 16);
+            this.sunLight.castShadow = true;
+            this.sunLight.shadow.mapSize.width = 2048;
+            this.sunLight.shadow.mapSize.height = 2048;
+            this.sunLight.shadow.camera.near = 2;
+            this.sunLight.shadow.camera.far = 65;
+            const d = 18;
+            this.sunLight.shadow.camera.left = -d;
+            this.sunLight.shadow.camera.right = d;
+            this.sunLight.shadow.camera.top = d;
+            this.sunLight.shadow.camera.bottom = -d;
+            this.sunLight.shadow.bias = -0.0005;
+            this.scene.add(this.sunLight);
+
+            // Cool rim fill light for dramatic metallic edge highlights
+            const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.55);
+            rimLight.position.set(-16, 12, -14);
+            this.scene.add(rimLight);
+
+            // Dynamic explosion point light
+            this.explosionLight = new THREE.PointLight(0xff6b00, 0, 22);
+            this.explosionLight.position.set(0, 2, 0);
+            this.scene.add(this.explosionLight);
+
+            // Raycaster for 3D tile picking
+            this.raycaster = new THREE.Raycaster();
+            this.mouseNDC = new THREE.Vector2(-99, -99);
+        }
+
+        initMaterials() {
+            const steelTex = ProceduralTextures.createBrushedSteel();
+            const pitTex = ProceduralTextures.createExcavatedPit();
+            const hazardTex = ProceduralTextures.createHazardStripeTexture();
+            const concreteTex = ProceduralTextures.createConcreteTerrain();
+
+            this.mats = {
+                coverDefault: new THREE.MeshStandardMaterial({
+                    map: steelTex.map,
+                    bumpMap: steelTex.bumpMap,
+                    bumpScale: 0.025,
+                    roughnessMap: steelTex.roughnessMap,
+                    roughness: 0.45,
+                    metalness: 0.72
+                }),
+                coverHover: new THREE.MeshStandardMaterial({
+                    map: steelTex.map,
+                    bumpMap: steelTex.bumpMap,
+                    bumpScale: 0.025,
+                    roughness: 0.35,
+                    metalness: 0.75,
+                    emissive: new THREE.Color(0xf59e0b),
+                    emissiveIntensity: 0.22
+                }),
+                coverFlagHover: new THREE.MeshStandardMaterial({
+                    map: steelTex.map,
+                    bumpMap: steelTex.bumpMap,
+                    bumpScale: 0.025,
+                    roughness: 0.35,
+                    metalness: 0.75,
+                    emissive: new THREE.Color(0xef4444),
+                    emissiveIntensity: 0.25
+                }),
+                pitFloor: new THREE.MeshStandardMaterial({
+                    map: pitTex.map,
+                    bumpMap: pitTex.bumpMap,
+                    bumpScale: 0.03,
+                    roughness: 0.88,
+                    metalness: 0.15
+                }),
+                pitDetonated: new THREE.MeshStandardMaterial({
+                    color: 0x3b0d0c,
+                    roughness: 0.9,
+                    metalness: 0.1,
+                    emissive: new THREE.Color(0x991b1b),
+                    emissiveIntensity: 0.35
+                }),
+                boardFrame: new THREE.MeshStandardMaterial({
+                    color: 0x1e252d,
+                    roughness: 0.5,
+                    metalness: 0.8
+                }),
+                hazardTrim: new THREE.MeshStandardMaterial({
+                    map: hazardTex,
+                    roughness: 0.48,
+                    metalness: 0.35
+                }),
+                groundTable: new THREE.MeshStandardMaterial({
+                    map: concreteTex.map,
+                    bumpMap: concreteTex.bumpMap,
+                    bumpScale: 0.04,
+                    roughness: 0.85,
+                    metalness: 0.15
+                }),
+                mineBody: new THREE.MeshStandardMaterial({
+                    color: 0x181c20,
+                    roughness: 0.32,
+                    metalness: 0.88
+                }),
+                mineHorn: new THREE.MeshStandardMaterial({
+                    color: 0x94a3b8,
+                    roughness: 0.25,
+                    metalness: 0.92
+                }),
+                mineLed: new THREE.MeshStandardMaterial({
+                    color: 0xff2222,
+                    emissive: new THREE.Color(0xff1111),
+                    emissiveIntensity: 1.6,
+                    roughness: 0.2
+                }),
+                flagPole: new THREE.MeshStandardMaterial({
+                    color: 0xd1d5db,
+                    roughness: 0.25,
+                    metalness: 0.9
+                }),
+                flagPennant: new THREE.MeshStandardMaterial({
+                    color: 0xef4444,
+                    emissive: new THREE.Color(0x991b1b),
+                    emissiveIntensity: 0.35,
+                    roughness: 0.4,
+                    side: THREE.DoubleSide
+                }),
+                flagBeaconLed: new THREE.MeshStandardMaterial({
+                    color: 0xff4444,
+                    emissive: new THREE.Color(0xff2222),
+                    emissiveIntensity: 1.8
+                })
+            };
+
+            // Pre-build materials for numbers 1..8
+            this.numberMats = {};
+            for (let n = 1; n <= 8; n++) {
+                this.numberMats[n] = new THREE.MeshStandardMaterial({
+                    map: ProceduralTextures.createNumberTexture(n),
+                    transparent: true,
+                    roughness: 0.65,
+                    metalness: 0.1,
+                    depthWrite: false
+                });
+            }
+        }
+
+        buildEnvironment() {
+            // Heavy-duty concrete EOD workbench ground plane
+            const groundGeo = new THREE.PlaneGeometry(140, 140);
+            const ground = new THREE.Mesh(groundGeo, this.mats.groundTable);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.55;
+            ground.receiveShadow = true;
+            this.scene.add(ground);
+
+            // Container groups for dynamic board elements
+            this.boardGroup = new THREE.Group();
+            this.scene.add(this.boardGroup);
+
+            this.fxGroup = new THREE.Group();
+            this.scene.add(this.fxGroup);
+
+            // Tactical Hover Reticle Ring
+            const reticleGeo = new THREE.RingGeometry(0.41, 0.46, 4);
+            reticleGeo.rotateZ(Math.PI / 4);
+            reticleGeo.rotateX(-Math.PI / 2);
+            this.reticleMat = new THREE.MeshBasicMaterial({
+                color: 0xf59e0b,
+                transparent: true,
+                opacity: 0.85,
+                side: THREE.DoubleSide
+            });
+            this.reticleMesh = new THREE.Mesh(reticleGeo, this.reticleMat);
+            this.reticleMesh.visible = false;
+            this.scene.add(this.reticleMesh);
+        }
+
+        /**
+         * Creates a detailed 3D Naval/Land Contact Mine mesh
+         */
+        createMineMesh() {
+            const mineGroup = new THREE.Group();
+
+            // Main armored sphere casing
+            const sphereGeo = new THREE.SphereGeometry(0.27, 24, 18);
+            const sphere = new THREE.Mesh(sphereGeo, this.mats.mineBody);
+            sphere.castShadow = true;
+            sphere.receiveShadow = true;
+            mineGroup.add(sphere);
+
+            // Hazard yellow/black equatorial collar ring
+            const collarGeo = new THREE.CylinderGeometry(0.285, 0.285, 0.08, 24);
+            const collar = new THREE.Mesh(collarGeo, this.mats.hazardTrim);
+            mineGroup.add(collar);
+
+            // Base mounting plate
+            const baseGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.12, 16);
+            const base = new THREE.Mesh(baseGeo, this.mats.boardFrame);
+            base.position.y = -0.22;
+            mineGroup.add(base);
+
+            // Detonator pressure horns / prongs radiating outward
+            const hornDirs = [
+                [0, 1, 0],
+                [0.75, 0.65, 0],
+                [-0.75, 0.65, 0],
+                [0, 0.65, 0.75],
+                [0, 0.65, -0.75],
+                [0.55, 0.55, 0.55],
+                [-0.55, 0.55, 0.55],
+                [0.55, 0.55, -0.55],
+                [-0.55, 0.55, -0.55]
+            ];
+
+            const hornGeo = new THREE.CylinderGeometry(0.018, 0.032, 0.14, 8);
+            const tipGeo = new THREE.SphereGeometry(0.025, 8, 8);
+
+            hornDirs.forEach(([dx, dy, dz], idx) => {
+                if (idx === 0) return; // Top reserved for blinking LED beacon
+                const dir = new THREE.Vector3(dx, dy, dz).normalize();
+                const horn = new THREE.Mesh(hornGeo, this.mats.mineHorn);
+                horn.position.copy(dir).multiplyScalar(0.29);
+                horn.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+                mineGroup.add(horn);
+
+                const tip = new THREE.Mesh(tipGeo, this.mats.mineLed);
+                tip.position.copy(dir).multiplyScalar(0.36);
+                mineGroup.add(tip);
+            });
+
+            // Top blinking warning LED dome
+            const ledGeo = new THREE.SphereGeometry(0.055, 12, 12);
+            const ledMesh = new THREE.Mesh(ledGeo, this.mats.mineLed);
+            ledMesh.position.y = 0.28;
+            mineGroup.add(ledMesh);
+            mineGroup.userData.led = ledMesh;
+
+            return mineGroup;
+        }
+
+        /**
+         * Creates a detailed 3D Tactical EOD Hazard Flag Beacon
+         */
+        createFlagMesh() {
+            const flagGroup = new THREE.Group();
+
+            // Heavy magnetic base disc
+            const baseGeo = new THREE.CylinderGeometry(0.16, 0.2, 0.06, 16);
+            const base = new THREE.Mesh(baseGeo, this.mats.boardFrame);
+            base.position.y = 0.03;
+            base.castShadow = true;
+            flagGroup.add(base);
+
+            // Hazard ring on base
+            const trimGeo = new THREE.CylinderGeometry(0.165, 0.165, 0.025, 16);
+            const trim = new THREE.Mesh(trimGeo, this.mats.hazardTrim);
+            trim.position.y = 0.045;
+            flagGroup.add(trim);
+
+            // Stainless steel mast
+            const poleGeo = new THREE.CylinderGeometry(0.022, 0.026, 0.66, 10);
+            const pole = new THREE.Mesh(poleGeo, this.mats.flagPole);
+            pole.position.y = 0.35;
+            pole.castShadow = true;
+            flagGroup.add(pole);
+
+            // Triangular tactical pennant flag
+            const shape = new THREE.Shape();
+            shape.moveTo(0, 0);
+            shape.lineTo(0.34, -0.09);
+            shape.lineTo(0, -0.2);
+            shape.closePath();
+
+            const extrudeSettings = { depth: 0.012, bevelEnabled: false };
+            const pennantGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            const pennant = new THREE.Mesh(pennantGeo, this.mats.flagPennant);
+            pennant.position.set(0.015, 0.63, -0.006);
+            pennant.castShadow = true;
+            flagGroup.add(pennant);
+
+            // Blinking LED beacon at top of mast
+            const tipGeo = new THREE.SphereGeometry(0.042, 10, 10);
+            const tipLed = new THREE.Mesh(tipGeo, this.mats.flagBeaconLed);
+            tipLed.position.y = 0.69;
+            flagGroup.add(tipLed);
+            flagGroup.userData.led = tipLed;
+
+            return flagGroup;
+        }
+
+        /**
+         * Rebuilds the 3D minefield board according to current difficulty
+         */
+        buildBoard() {
+            // Clear existing board meshes
+            while (this.boardGroup.children.length > 0) {
+                this.boardGroup.remove(this.boardGroup.children[0]);
+            }
+            this.tilePickMeshes = [];
+            this.grid = [];
+
+            const boardWidth = this.cols * this.step;
+            const boardDepth = this.rows * this.step;
+
+            // 1. Heavy armored chassis base slab
+            const chassisGeo = new THREE.BoxGeometry(boardWidth + 0.9, 0.55, boardDepth + 0.9);
+            const chassis = new THREE.Mesh(chassisGeo, this.mats.boardFrame);
+            chassis.position.y = -0.28;
+            chassis.receiveShadow = true;
+            chassis.castShadow = true;
+            this.boardGroup.add(chassis);
+
+            // 2. Hazard warning border trim around perimeter
+            const hazardGeo = new THREE.BoxGeometry(boardWidth + 0.52, 0.42, boardDepth + 0.52);
+            const hazardFrame = new THREE.Mesh(hazardGeo, this.mats.hazardTrim);
+            hazardFrame.position.y = -0.18;
+            hazardFrame.receiveShadow = true;
+            this.boardGroup.add(hazardFrame);
+
+            // 3. Inner recessed dark pit bed
+            const bedGeo = new THREE.BoxGeometry(boardWidth + 0.12, 0.36, boardDepth + 0.12);
+            const bedMesh = new THREE.Mesh(bedGeo, this.mats.boardFrame);
+            bedMesh.position.y = -0.14;
+            bedMesh.receiveShadow = true;
+            this.boardGroup.add(bedMesh);
+
+            // Shared geometries for tiles
+            const pitFloorGeo = new THREE.PlaneGeometry(this.tileSize * 0.96, this.tileSize * 0.96);
+            pitFloorGeo.rotateX(-Math.PI / 2);
+
+            const numPlaneGeo = new THREE.PlaneGeometry(this.tileSize * 0.84, this.tileSize * 0.84);
+            numPlaneGeo.rotateX(-Math.PI / 2);
+
+            const coverGeo = new THREE.BoxGeometry(this.tileSize * 0.96, 0.24, this.tileSize * 0.96);
+
+            const startX = -((this.cols - 1) * this.step) / 2;
+            const startZ = -((this.rows - 1) * this.step) / 2;
+
+            for (let r = 0; r < this.rows; r++) {
+                const rowArr = [];
+                for (let c = 0; c < this.cols; c++) {
+                    const x = startX + c * this.step;
+                    const z = startZ + r * this.step;
+
+                    // Recessed pit floor
+                    const pitMesh = new THREE.Mesh(pitFloorGeo, this.mats.pitFloor);
+                    pitMesh.position.set(x, 0.045, z);
+                    pitMesh.receiveShadow = true;
+                    this.boardGroup.add(pitMesh);
+
+                    // Number stencil overlay (hidden until revealed if neighborMines > 0)
+                    const numMesh = new THREE.Mesh(numPlaneGeo, this.numberMats[1]);
+                    numMesh.position.set(x, 0.052, z);
+                    numMesh.visible = false;
+                    this.boardGroup.add(numMesh);
+
+                    // Armored cover hatch block
+                    const coverMesh = new THREE.Mesh(coverGeo, this.mats.coverDefault);
+                    coverMesh.position.set(x, 0.17, z);
+                    coverMesh.castShadow = true;
+                    coverMesh.receiveShadow = true;
+                    this.boardGroup.add(coverMesh);
+
+                    const tileData = {
+                        r,
+                        c,
+                        x,
+                        z,
+                        isMine: false,
+                        isRevealed: false,
+                        isFlagged: false,
+                        neighborMines: 0,
+                        pitMesh,
+                        numMesh,
+                        coverMesh,
+                        mineMesh: null,
+                        flagMesh: null,
+                        // Animation targets
+                        targetCoverY: 0.17,
+                        coverScale: 1.0,
+                        targetCoverScale: 1.0,
+                        revealDelay: 0,
+                        revealTriggered: false,
+                        flagDropY: 0
+                    };
+
+                    coverMesh.userData.tile = tileData;
+                    pitMesh.userData.tile = tileData;
+
+                    this.tilePickMeshes.push(coverMesh);
+                    this.tilePickMeshes.push(pitMesh);
+                    rowArr.push(tileData);
+                }
+                this.grid.push(rowArr);
+            }
+        }
+
+        setDifficulty(diffKey) {
+            if (!this.difficulties[diffKey]) return;
+            this.currentDifficulty = diffKey;
+            const cfg = this.difficulties[diffKey];
+            this.rows = cfg.rows;
+            this.cols = cfg.cols;
+            this.totalMines = cfg.mines;
+
+            // Update active button UI
+            ['beginner', 'intermediate', 'expert'].forEach(k => {
+                const btn = document.getElementById(`diff-${k}`);
+                if (k === diffKey) {
+                    btn.classList.add('hud-btn-active');
+                } else {
+                    btn.classList.remove('hud-btn-active');
+                }
+            });
+
+            this.resetGame();
+            this.resetCamera();
+        }
+
+        resetGame() {
+            this.stopTimer();
+            this.state = 'ready';
+            this.firstClickDone = false;
+            this.flagsPlaced = 0;
+            this.revealedCount = 0;
+            this.elapsedSeconds = 0;
+            this.hoveredTile = null;
+            this.scanWaveTime = -1;
+            this.reticleMesh.visible = false;
+
+            // Clear particles
+            while (this.fxGroup.children.length > 0) {
+                this.fxGroup.remove(this.fxGroup.children[0]);
+            }
+            this.particles = [];
+            this.shockwaves = [];
+
+            this.hideModal();
+            this.buildBoard();
+            this.updateHUD();
+        }
+
+        resetCamera() {
+            const cfg = this.difficulties[this.currentDifficulty];
+            // Adjust distance slightly for portrait screens so board fits comfortably
+            const aspect = (this.container.clientWidth || window.innerWidth) / (this.container.clientHeight || window.innerHeight);
+            const aspectFactor = aspect < 1 ? (1 / Math.max(aspect, 0.55)) * 0.85 : 1.0;
+
+            this.camSpherical.radius = cfg.camDist * aspectFactor;
+            this.camSpherical.theta = 0;
+            this.camSpherical.phi = Math.PI * 0.25;
+            this.camTarget.set(0, 0, 0);
+            this.updateCameraTransform();
+        }
+
+        updateCameraTransform() {
+            const { radius, theta, phi } = this.camSpherical;
+            const sinPhi = Math.sin(phi);
+            const x = this.camTarget.x + radius * sinPhi * Math.sin(theta);
+            const y = this.camTarget.y + radius * Math.cos(phi);
+            const z = this.camTarget.z + radius * sinPhi * Math.cos(theta);
+
+            this.camera.position.set(x, y, z);
+            this.camera.lookAt(this.camTarget);
+        }
+
+        /**
+         * Places mines randomly after the first click, guaranteeing the clicked
+         * tile and its immediate 8 neighbors are completely safe.
+         */
+        placeMinesSafe(safeR, safeC) {
+            const candidates = [];
+            for (let r = 0; r < this.rows; r++) {
+                for (let c = 0; c < this.cols; c++) {
+                    if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) {
+                        continue;
+                    }
+                    candidates.push(this.grid[r][c]);
+                }
+            }
+
+            // Fisher-Yates shuffle
+            for (let i = candidates.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+            }
+
+            const count = Math.min(this.totalMines, candidates.length);
+            for (let i = 0; i < count; i++) {
+                const tile = candidates[i];
+                tile.isMine = true;
+
+                // Create hidden 3D mine mesh beneath cover
+                const mineMesh = this.createMineMesh();
+                mineMesh.position.set(tile.x, 0.22, tile.z);
+                mineMesh.visible = false;
+                this.boardGroup.add(mineMesh);
+                tile.mineMesh = mineMesh;
+            }
+
+            // Calculate neighbor mine counts
+            for (let r = 0; r < this.rows; r++) {
+                for (let c = 0; c < this.cols; c++) {
+                    const tile = this.grid[r][c];
+                    if (tile.isMine) continue;
+                    let nCount = 0;
+                    this.forEachNeighbor(r, c, (nb) => {
+                        if (nb.isMine) nCount++;
+                    });
+                    tile.neighborMines = nCount;
+                    if (nCount > 0) {
+                        tile.numMesh.material = this.numberMats[nCount];
+                    }
+                }
+            }
+        }
+
+        forEachNeighbor(r, c, callback) {
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr < this.rows && nc >= 0 && nc < this.cols) {
+                        callback(this.grid[nr][nc]);
+                    }
+                }
+            }
+        }
+
+        startTimer() {
+            if (this.timerInterval) return;
+            this.timerInterval = setInterval(() => {
+                if (this.state === 'playing') {
+                    this.elapsedSeconds = Math.min(999, this.elapsedSeconds + 1);
+                    this.updateHUD();
+                }
+            }, 1000);
+        }
+
+        stopTimer() {
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+                this.timerInterval = null;
+            }
+        }
+
+        toggleInputMode() {
+            this.inputMode = this.inputMode === 'dig' ? 'flag' : 'dig';
+            const btn = document.getElementById('btn-mode-toggle');
+            const icon = document.getElementById('mode-icon');
+            const label = document.getElementById('mode-label');
+
+            if (this.inputMode === 'flag') {
+                btn.classList.add('hud-btn-flag-active');
+                icon.textContent = '🚩';
+                label.textContent = 'FLAG';
+            } else {
+                btn.classList.remove('hud-btn-flag-active');
+                icon.textContent = '⛏️';
+                label.textContent = 'DIG';
+            }
+        }
+
+        toggleMute() {
+            const isMuted = this.sfx.toggleMute();
+            document.getElementById('icon-sound-on').classList.toggle('hidden', isMuted);
+            document.getElementById('icon-sound-off').classList.toggle('hidden', !isMuted);
+        }
+
+        updateHUD() {
+            const rem = this.totalMines - this.flagsPlaced;
+            const formattedMines = rem < 0
+                ? '-' + String(Math.abs(rem)).padStart(2, '0')
+                : String(rem).padStart(3, '0');
+            document.getElementById('mine-counter').textContent = formattedMines;
+            document.getElementById('timer-display').textContent = String(this.elapsedSeconds).padStart(3, '0');
+        }
+
+        /**
+         * Handles player clicking a tile (Excavate, Flag, or Chord)
+         */
+        handleTileAction(tile, isFlagAction) {
+            if (!tile || this.state === 'won' || this.state === 'lost') return;
+            this.sfx.init();
+
+            // Flag action
+            if (isFlagAction) {
+                if (tile.isRevealed) return;
+                this.toggleFlag(tile);
+                return;
+            }
+
+            // Chording on an already revealed numbered tile
+            if (tile.isRevealed) {
+                if (tile.neighborMines > 0) {
+                    this.attemptChord(tile);
+                }
+                return;
+            }
+
+            // Cannot dig a flagged tile
+            if (tile.isFlagged) return;
+
+            // First click initialization
+            if (!this.firstClickDone) {
+                this.firstClickDone = true;
+                this.state = 'playing';
+                this.placeMinesSafe(tile.r, tile.c);
+                this.startTimer();
+            }
+
+            // Detonation check
+            if (tile.isMine) {
+                this.triggerMineDetonation(tile);
+                return;
+            }
+
+            // Reveal safe tile(s) with staggered wave animation
+            this.revealSafeArea(tile);
+            this.checkVictory();
+        }
+
+        toggleFlag(tile) {
+            if (tile.isRevealed) return;
+
+            if (!tile.isFlagged) {
+                tile.isFlagged = true;
+                this.flagsPlaced++;
+                const flagMesh = this.createFlagMesh();
+                flagMesh.position.set(tile.x, 0.55, tile.z);
+                tile.flagDropY = 0.28;
+                this.boardGroup.add(flagMesh);
+                tile.flagMesh = flagMesh;
+                this.sfx.playFlag(true);
+            } else {
+                tile.isFlagged = false;
+                this.flagsPlaced--;
+                if (tile.flagMesh) {
+                    this.boardGroup.remove(tile.flagMesh);
+                    tile.flagMesh = null;
+                }
+                this.sfx.playFlag(false);
+            }
+            this.updateHUD();
+        }
+
+        attemptChord(centerTile) {
+            let surroundingFlags = 0;
+            const unflaggedNeighbors = [];
+
+            this.forEachNeighbor(centerTile.r, centerTile.c, (nb) => {
+                if (nb.isFlagged) {
+                    surroundingFlags++;
+                } else if (!nb.isRevealed) {
+                    unflaggedNeighbors.push(nb);
+                }
+            });
+
+            if (surroundingFlags === centerTile.neighborMines && unflaggedNeighbors.length > 0) {
+                let hitMine = null;
+                for (const nb of unflaggedNeighbors) {
+                    if (nb.isMine) {
+                        hitMine = nb;
+                        break;
+                    }
+                }
+
+                if (hitMine) {
+                    this.triggerMineDetonation(hitMine);
+                } else {
+                    unflaggedNeighbors.forEach((nb, i) => {
+                        this.revealSafeArea(nb, i * 0.02);
+                    });
+                    this.checkVictory();
+                }
+            }
+        }
+
+        /**
+         * BFS flood-fill expansion for zero-neighbor tiles with staggered visual wave
+         */
+        revealSafeArea(startTile, baseDelay = 0) {
+            const queue = [{ tile: startTile, dist: 0 }];
+            const visited = new Set([`${startTile.r},${startTile.c}`]);
+            let revealedBatch = 0;
+
+            while (queue.length > 0) {
+                const { tile, dist } = queue.shift();
+                if (tile.isRevealed || tile.isFlagged || tile.isMine) continue;
+
+                tile.isRevealed = true;
+                this.revealedCount++;
+                revealedBatch++;
+
+                // Staggered animation timing based on Manhattan/Euclidean wave distance
+                tile.revealDelay = baseDelay + dist * 0.032;
+                tile.revealTriggered = false;
+
+                if (tile.neighborMines === 0) {
+                    this.forEachNeighbor(tile.r, tile.c, (nb) => {
+                        const key = `${nb.r},${nb.c}`;
+                        if (!visited.has(key) && !nb.isRevealed && !nb.isFlagged && !nb.isMine) {
+                            visited.add(key);
+                            queue.push({ tile: nb, dist: dist + 1 });
+                        }
+                    });
+                }
+            }
+
+            if (revealedBatch > 0) {
+                this.sfx.playDig(Math.min(revealedBatch, 8));
+            }
+        }
+
+        checkVictory() {
+            const totalSafeTiles = this.rows * this.cols - this.totalMines;
+            if (this.revealedCount >= totalSafeTiles && this.state === 'playing') {
+                this.state = 'won';
+                this.stopTimer();
+                this.sfx.playVictory();
+                this.scanWaveTime = 0;
+
+                // Automatically plant flags on any unflagged mines
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        const t = this.grid[r][c];
+                        if (t.isMine && !t.isFlagged) {
+                            t.isFlagged = true;
+                            this.flagsPlaced++;
+                            const flagMesh = this.createFlagMesh();
+                            flagMesh.position.set(t.x, 0.28, t.z);
+                            this.boardGroup.add(flagMesh);
+                            t.flagMesh = flagMesh;
+                        }
+                    }
+                }
+                this.updateHUD();
+
+                setTimeout(() => {
+                    this.showEndModal(true);
+                }, 1150);
+            }
+        }
+
+        triggerMineDetonation(detonatedTile) {
+            this.state = 'lost';
+            this.stopTimer();
+            this.sfx.playExplosion();
+            this.cameraShake = 0.75;
+
+            // Scorch detonated pit
+            detonatedTile.pitMesh.material = this.mats.pitDetonated;
+
+            // Flash explosion point light
+            this.explosionLight.position.set(detonatedTile.x, 1.4, detonatedTile.z);
+            this.explosionLight.intensity = 14.0;
+
+            // Spawn fireball, smoke, debris chunks, and shockwave ring
+            this.spawnExplosionFX(detonatedTile.x, 0.35, detonatedTile.z);
+
+            // Reveal all mines on the board
+            for (let r = 0; r < this.rows; r++) {
+                for (let c = 0; c < this.cols; c++) {
+                    const t = this.grid[r][c];
+                    if (t.isMine) {
+                        t.isRevealed = true;
+                        t.coverMesh.visible = false;
+                        if (t.flagMesh) {
+                            t.flagMesh.visible = false;
+                        }
+                        if (t.mineMesh) {
+                            t.mineMesh.visible = true;
+                        }
+                    } else if (t.isFlagged) {
+                        // Mark false flags by tinting pennant dark/amber
+                        if (t.flagMesh) {
+                            t.flagMesh.rotation.z = 0.45;
+                        }
+                    }
+                }
+            }
+
+            setTimeout(() => {
+                this.showEndModal(false);
+            }, 1450);
+        }
+
+        spawnExplosionFX(x, y, z) {
+            // 1. Expanding Shockwave Ring
+            const ringGeo = new THREE.RingGeometry(0.15, 0.45, 32);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xff9e2c,
+                transparent: true,
+                opacity: 0.95,
+                side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(x, 0.25, z);
+            this.fxGroup.add(ring);
+            this.shockwaves.push({ mesh: ring, age: 0, maxAge: 0.65 });
+
+            // 2. Fireball & Smoke Plume Spheres
+            const sphereGeo = new THREE.SphereGeometry(0.16, 10, 10);
+            for (let i = 0; i < 36; i++) {
+                const isFire = i < 18;
+                const mat = new THREE.MeshBasicMaterial({
+                    color: isFire ? (i % 2 === 0 ? 0xff5500 : 0xffbb22) : 0x27272a,
+                    transparent: true,
+                    opacity: isFire ? 0.95 : 0.78
+                });
+                const p = new THREE.Mesh(sphereGeo, mat);
+                p.position.set(x, y, z);
+
+                const angle = Math.random() * Math.PI * 2;
+                const speed = (isFire ? 2.5 : 1.4) + Math.random() * 4.5;
+                const vy = (isFire ? 3.5 : 2.2) + Math.random() * 5.0;
+
+                this.fxGroup.add(p);
+                this.particles.push({
+                    mesh: p,
+                    vx: Math.cos(angle) * speed,
+                    vy,
+                    vz: Math.sin(angle) * speed,
+                    gravity: isFire ? 6.0 : -1.2, // Smoke rises slowly
+                    rotSpeed: (Math.random() - 0.5) * 8,
+                    scaleRate: isFire ? -0.8 : 1.6,
+                    age: 0,
+                    maxAge: (isFire ? 0.45 : 1.1) + Math.random() * 0.4
+                });
+            }
+
+            // 3. Flying Metallic Shrapnel Chunks
+            const chunkGeo = new THREE.BoxGeometry(0.14, 0.08, 0.14);
+            for (let i = 0; i < 24; i++) {
+                const chunk = new THREE.Mesh(chunkGeo, this.mats.boardFrame);
+                chunk.position.set(x, y + 0.1, z);
+                chunk.castShadow = true;
+
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2.8 + Math.random() * 6.5;
+                const vy = 4.5 + Math.random() * 6.5;
+
+                this.fxGroup.add(chunk);
+                this.particles.push({
+                    mesh: chunk,
+                    vx: Math.cos(angle) * speed,
+                    vy,
+                    vz: Math.sin(angle) * speed,
+                    gravity: 16.5,
+                    rotSpeed: (Math.random() - 0.5) * 18,
+                    scaleRate: 0,
+                    age: 0,
+                    maxAge: 1.2 + Math.random() * 0.5,
+                    bounce: true
+                });
+            }
+        }
+
+        showEndModal(isVictory) {
+            const modal = document.getElementById('endgame-modal');
+            const dot = document.getElementById('modal-status-dot');
+            const subtitle = document.getElementById('modal-subtitle');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+
+            const totalSafe = this.rows * this.cols - this.totalMines;
+            const pctCleared = Math.round((this.revealedCount / Math.max(1, totalSafe)) * 100);
+
+            document.getElementById('stat-time').textContent = `${this.elapsedSeconds}s`;
+            document.getElementById('stat-cleared').textContent = `${pctCleared}%`;
+            document.getElementById('stat-mines').textContent = `${Math.min(this.flagsPlaced, this.totalMines)}/${this.totalMines}`;
+
+            if (isVictory) {
+                dot.className = 'w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]';
+                subtitle.className = 'text-xs font-mono-tech uppercase tracking-widest text-emerald-400';
+                subtitle.textContent = 'SECTOR SECURED';
+                title.textContent = 'ORDNANCE NEUTRALIZED';
+                desc.textContent = 'Outstanding EOD precision. Every explosive hazard in the sector has been isolated and marked.';
+            } else {
+                dot.className = 'w-3 h-3 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444]';
+                subtitle.className = 'text-xs font-mono-tech uppercase tracking-widest text-red-400';
+                subtitle.textContent = 'DETONATION DETECTED';
+                title.textContent = 'MISSION FAILED';
+                desc.textContent = 'A live pressure mine was triggered during excavation. Review the exposed minefield telemetry below.';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        hideModal() {
+            const modal = document.getElementById('endgame-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        /**
+         * Input & Camera Controls (Mouse, Wheel, Touch)
+         */
+        bindEvents() {
+            window.addEventListener('resize', () => {
+                const w = this.container.clientWidth || window.innerWidth;
+                const h = this.container.clientHeight || window.innerHeight;
+                this.camera.aspect = w / h;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(w, h);
+            });
+
+            const dom = this.renderer.domElement;
+
+            dom.addEventListener('pointerdown', (e) => {
+                this.pointerDownPos = { x: e.clientX, y: e.clientY };
+                this.lastPointerPos = { x: e.clientX, y: e.clientY };
+                this.pointerMoved = false;
+
+                // Right-click or Middle-click initiates camera orbit
+                if (e.button === 2 || e.button === 1) {
+                    this.isOrbiting = true;
+                }
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                const rect = dom.getBoundingClientRect();
+                this.mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                const dx = e.clientX - this.lastPointerPos.x;
+                const dy = e.clientY - this.lastPointerPos.y;
+                const totalMove = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
+
+                if (totalMove > 6) {
+                    this.pointerMoved = true;
+                }
+
+                if (this.isOrbiting) {
+                    this.camSpherical.theta -= dx * 0.0075;
+                    this.camSpherical.phi = Math.max(0.12, Math.min(Math.PI * 0.44, this.camSpherical.phi - dy * 0.0075));
+                    this.updateCameraTransform();
+                }
+
+                this.lastPointerPos = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('pointerup', (e) => {
+                const wasOrbiting = this.isOrbiting;
+                this.isOrbiting = false;
+
+                // Ignore click if user was dragging camera
+                if (this.pointerMoved) return;
+
+                // Ensure click occurred on the 3D canvas
+                if (e.target !== dom) return;
+
+                const tile = this.pickTile();
+                if (!tile) return;
+
+                if (e.button === 2 && !wasOrbiting) {
+                    // Quick right-click without drag -> toggle flag
+                    this.handleTileAction(tile, true);
+                } else if (e.button === 0) {
+                    const isFlag = e.shiftKey || this.inputMode === 'flag';
+                    this.handleTileAction(tile, isFlag);
+                }
+            });
+
+            // Smooth zoom via scroll wheel
+            dom.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.0014 * this.camSpherical.radius;
+                this.camSpherical.radius = Math.max(6.0, Math.min(42.0, this.camSpherical.radius + e.deltaY * zoomSpeed));
+                this.updateCameraTransform();
+            }, { passive: false });
+
+            // Two-finger touch pinch & orbit support
+            let lastTouchDist = 0;
+            dom.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    this.isOrbiting = true;
+                    lastTouchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: true });
+
+            dom.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2) {
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const delta = lastTouchDist - dist;
+                    this.camSpherical.radius = Math.max(6.0, Math.min(42.0, this.camSpherical.radius + delta * 0.03));
+                    lastTouchDist = dist;
+                    this.updateCameraTransform();
+                }
+            }, { passive: true });
+        }
+
+        pickTile() {
+            this.raycaster.setFromCamera(this.mouseNDC, this.camera);
+            const hits = this.raycaster.intersectObjects(this.tilePickMeshes, false);
+            for (let i = 0; i < hits.length; i++) {
+                const obj = hits[i].object;
+                if (obj.visible && obj.userData.tile) {
+                    return obj.userData.tile;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Main 60FPS Render & Animation Loop
+         */
+        animate() {
+            requestAnimationFrame(this.animate);
+
+            const dt = Math.min(this.clock.getDelta(), 0.05);
+            const elapsed = this.clock.getElapsedTime();
+
+            // 1. Hover Raycasting & Reticle Highlight
+            if (this.state === 'ready' || this.state === 'playing') {
+                const picked = this.pickTile();
+                if (picked !== this.hoveredTile) {
+                    if (this.hoveredTile && !this.hoveredTile.isRevealed) {
+                        this.hoveredTile.coverMesh.material = this.mats.coverDefault;
+                    }
+                    this.hoveredTile = picked;
+                }
+
+                if (this.hoveredTile) {
+                    this.reticleMesh.visible = true;
+                    this.reticleMesh.position.set(
+                        this.hoveredTile.x,
+                        this.hoveredTile.isRevealed ? 0.065 : 0.305,
+                        this.hoveredTile.z
+                    );
+                    this.reticleMat.color.setHex(this.inputMode === 'flag' ? 0xef4444 : 0xf59e0b);
+
+                    if (!this.hoveredTile.isRevealed) {
+                        this.hoveredTile.coverMesh.material =
+                            this.inputMode === 'flag' ? this.mats.coverFlagHover : this.mats.coverHover;
+                    }
+                } else {
+                    this.reticleMesh.visible = false;
+                }
+            } else {
+                this.reticleMesh.visible = false;
+            }
+
+            // 2. Animate Tiles (Hover elevation, Staggered Flood-Fill Reveal, Flag Drop, Victory Scan)
+            if (this.scanWaveTime >= 0) {
+                this.scanWaveTime += dt * 16;
+            }
+
+            for (let r = 0; r < this.rows; r++) {
+                for (let c = 0; c < this.cols; c++) {
+                    const t = this.grid[r][c];
+
+                    // Blinking LED on planted flags
+                    if (t.isFlagged && t.flagMesh) {
+                        if (t.flagMesh.position.y > t.flagDropY) {
+                            t.flagMesh.position.y = Math.max(t.flagDropY, t.flagMesh.position.y - dt * 3.8);
+                        }
+                        const pulse = 0.5 + 0.5 * Math.sin(elapsed * 6 + r + c);
+                        t.flagMesh.userData.led.scale.setScalar(0.85 + pulse * 0.35);
+                    }
+
+                    // Blinking LED on exposed mines
+                    if (t.mineMesh && t.mineMesh.visible) {
+                        const mPulse = 0.5 + 0.5 * Math.sin(elapsed * 10 + r * 2);
+                        t.mineMesh.userData.led.scale.setScalar(0.8 + mPulse * 0.5);
+                    }
+
+                    // Staggered reveal animation
+                    if (t.isRevealed && !t.isMine) {
+                        if (!t.revealTriggered) {
+                            t.revealDelay -= dt;
+                            if (t.revealDelay <= 0) {
+                                t.revealTriggered = true;
+                                if (t.neighborMines > 0) {
+                                    t.numMesh.visible = true;
+                                }
+                            }
+                        } else if (t.coverMesh.visible) {
+                            // Smooth retract & shrink of cover hatch into pit
+                            t.coverScale = Math.max(0.01, t.coverScale - dt * 6.5);
+                            t.coverMesh.scale.set(t.coverScale, t.coverScale, t.coverScale);
+                            t.coverMesh.position.y -= dt * 1.4;
+                            if (t.coverScale <= 0.05) {
+                                t.coverMesh.visible = false;
+                            }
+                        }
+                    } else if (!t.isRevealed) {
+                        // Subtle hover lift on covered tiles
+                        const isHovered = (this.hoveredTile === t) && (this.state === 'ready' || this.state === 'playing');
+                        const desiredY = isHovered ? 0.23 : 0.17;
+                        t.coverMesh.position.y += (desiredY - t.coverMesh.position.y) * Math.min(1, dt * 16);
+                    }
+
+                    // Celebratory Victory Green Scan Wave
+                    if (this.scanWaveTime >= 0) {
+                        const distFromCenter = Math.hypot(t.x, t.z);
+                        const waveDelta = Math.abs(distFromCenter - this.scanWaveTime);
+                        if (waveDelta < 1.2) {
+                            t.pitMesh.material = this.mats.pitFloor.clone();
+                            t.pitMesh.material.emissive = new THREE.Color(0x10b981);
+                            t.pitMesh.material.emissiveIntensity = (1.2 - waveDelta) * 0.55;
+                        }
+                    }
+                }
+            }
+
+            // 3. Update Explosion Particles & Shockwaves
+            for (let i = this.particles.length - 1; i >= 0; i--) {
+                const p = this.particles[i];
+                p.age += dt;
+                if (p.age >= p.maxAge) {
+                    this.fxGroup.remove(p.mesh);
+                    this.particles.splice(i, 1);
+                    continue;
+                }
+
+                p.vy -= p.gravity * dt;
+                p.mesh.position.x += p.vx * dt;
+                p.mesh.position.y += p.vy * dt;
+                p.mesh.position.z += p.vz * dt;
+
+                if (p.bounce && p.mesh.position.y < 0.08) {
+                    p.mesh.position.y = 0.08;
+                    p.vy = Math.abs(p.vy) * 0.45;
+                    p.vx *= 0.75;
+                    p.vz *= 0.75;
+                }
+
+                p.mesh.rotation.x += p.rotSpeed * dt;
+                p.mesh.rotation.y += p.rotSpeed * dt;
+
+                const lifeRatio = 1 - (p.age / p.maxAge);
+                if (p.mesh.material.transparent) {
+                    p.mesh.material.opacity = lifeRatio * 0.9;
+                }
+                if (p.scaleRate !== 0) {
+                    const s = Math.max(0.1, p.mesh.scale.x + p.scaleRate * dt);
+                    p.mesh.scale.setScalar(s);
+                }
+            }
+
+            for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+                const sw = this.shockwaves[i];
+                sw.age += dt;
+                if (sw.age >= sw.maxAge) {
+                    this.fxGroup.remove(sw.mesh);
+                    this.shockwaves.splice(i, 1);
+                    continue;
+                }
+                const progress = sw.age / sw.maxAge;
+                const scale = 1 + progress * 14;
+                sw.mesh.scale.set(scale, scale, 1);
+                sw.mesh.material.opacity = (1 - progress) * 0.85;
+            }
+
+            // 4. Decay Explosion Flash & Camera Shake
+            if (this.explosionLight.intensity > 0.01) {
+                this.explosionLight.intensity *= Math.pow(0.04, dt);
+            } else {
+                this.explosionLight.intensity = 0;
+            }
+
+            if (this.cameraShake > 0.001) {
+                this.updateCameraTransform();
+                this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
+                this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
+                this.camera.position.z += (Math.random() - 0.5) * this.cameraShake;
+                this.cameraShake *= Math.pow(0.02, dt);
+            }
+
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    // Boot up the 3D Tactical Minesweeper application once window & resources are ready
+    let game;
+    window.onload = function () {
+        game = new TacticalMinesweeper3D();
+        game.animate();
+    };
+    </script>
+  <script type="module" src="../../account-activity.js"></script>
+</body>
+</html>
