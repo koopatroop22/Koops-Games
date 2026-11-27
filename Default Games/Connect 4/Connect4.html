@@ -3056,37 +3056,45 @@
             let abortReason = null;
             const result = await runTransaction(roomRef, (current) => {
               transactionAttempts++;
+              // get() can return the server room without placing it in RTDB's
+              // transaction cache. On the first callback only, seed that null
+              // cache value from the fetched snapshot. If Firebase detects a
+              // concurrent write, it retries this callback with the new server
+              // state, which is then checked normally below.
+              const usingPrefetchedRoom = !current && transactionAttempts === 1;
+              const room = current || (usingPrefetchedRoom ? roomBeforeJoin : null);
               const state = {
                 attempt: transactionAttempts,
                 currentExists: Boolean(current),
-                status: current?.status ?? null,
-                hasGuest: Boolean(current?.guestUid),
-                sameAccountAsHost: Boolean(current?.hostUid && current.hostUid === user.uid),
-                moveCount: Number.isFinite(Number(current?.moveCount)) ? Number(current.moveCount) : null
+                usingPrefetchedRoom,
+                status: room?.status ?? null,
+                hasGuest: Boolean(room?.guestUid),
+                sameAccountAsHost: Boolean(room?.hostUid && room.hostUid === user.uid),
+                moveCount: Number.isFinite(Number(room?.moveCount)) ? Number(room.moveCount) : null
               };
               this.logOnlineJoin('transaction-current', state);
-              if (!current) {
+              if (!room) {
                 abortReason = 'room-missing';
                 return;
               }
-              if (current.status !== 'waiting') {
+              if (room.status !== 'waiting') {
                 abortReason = 'room-not-waiting';
                 return;
               }
-              if (current.guestUid) {
+              if (room.guestUid) {
                 abortReason = 'room-has-guest';
                 return;
               }
-              if (current.hostUid === user.uid) {
+              if (room.hostUid === user.uid) {
                 abortReason = 'same-account-as-host';
                 return;
               }
               return {
-                ...current,
+                ...room,
                 guestUid: user.uid,
                 guestName: name,
                 status: 'playing',
-                currentTurnUid: current.hostUid,
+                currentTurnUid: room.hostUid,
                 updatedAt: Date.now()
               };
             }, { applyLocally: false });
