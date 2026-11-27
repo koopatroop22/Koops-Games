@@ -195,7 +195,7 @@
           <!-- Mode Card -->
           <div class="bg-slate-950/55 border border-white/10 rounded-2xl p-3.5">
             <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Play Mode</div>
-            <div class="grid grid-cols-2 gap-1.5">
+            <div class="grid grid-cols-3 gap-1.5">
               <button
                 id="menu-mode-bot"
                 type="button"
@@ -209,6 +209,13 @@
                 class="hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10"
               >
                 2 Players
+              </button>
+              <button
+                id="menu-mode-online"
+                type="button"
+                class="hud-btn py-2 px-2 rounded-xl text-[11px] font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10"
+              >
+                Online
               </button>
             </div>
           </div>
@@ -258,8 +265,34 @@
           </div>
         </div>
 
+        <div id="online-room-panel" class="hidden mb-6 rounded-2xl border border-emerald-300/20 bg-emerald-950/30 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-emerald-100">Online room</h2>
+              <p class="mt-1 text-[11px] text-slate-300">Choose a temporary room name, create a room code, or enter a friend’s code.</p>
+            </div>
+            <span class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-200">Spark friendly</span>
+          </div>
+          <label for="online-name-input" class="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">Temporary room name</label>
+          <input id="online-name-input" type="text" maxlength="20" autocomplete="nickname" placeholder="Player name"
+            class="mb-3 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-300/60" />
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button id="online-create-room-btn" type="button" class="hud-btn rounded-xl bg-emerald-400 px-3 py-2.5 text-xs font-bold text-slate-950 hover:bg-emerald-300">Create room</button>
+            <div class="flex gap-2">
+              <input id="online-room-code-input" type="text" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="8-character code"
+                class="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 font-mono text-sm uppercase tracking-[0.18em] text-white outline-none focus:border-emerald-300/60" />
+              <button id="online-join-room-btn" type="button" class="hud-btn rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-semibold text-white hover:bg-white/15">Join</button>
+            </div>
+          </div>
+          <div id="online-room-code-display" class="mt-3 hidden items-center justify-between gap-3 rounded-xl border border-emerald-300/25 bg-slate-950/70 px-3 py-2.5">
+            <div><span class="block text-[9px] font-semibold uppercase tracking-wider text-slate-400">Share this room code</span><strong id="online-room-code-value" class="font-mono text-lg tracking-[0.22em] text-emerald-200"></strong></div>
+            <button id="online-copy-code-btn" type="button" class="hud-btn rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/10">Copy</button>
+          </div>
+          <p id="online-room-status" class="mt-3 min-h-4 text-[11px] text-slate-300" role="status" aria-live="polite">Online rooms need Firebase Anonymous sign-in and the Connect 4 database rules.</p>
+        </div>
+
         <!-- Primary Launch Actions -->
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div id="menu-actions" class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <button
             id="menu-start-btn"
             type="button"
@@ -554,7 +587,12 @@
     </div>
   </footer>
 
-  <script>
+  <script type="module">
+    import { signInAnonymously } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
+    import { onValue, ref, runTransaction } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js';
+    import { auth, firebaseReady, realtimeDb } from '../../firebase.js';
+    import { getActiveProfile } from '../../local-profile-store.js';
+    const THREE = window.THREE;
     /**
      * =========================================================================
      * 3D CONNECT 4 — REALISTIC TABLETOP EDITION
@@ -587,6 +625,17 @@
       const EMPTY = 0;
       const P1 = 1; // Crimson / Red
       const P2 = 2; // Rich Gold / Amber
+      const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+      function makeRoomCode() {
+        const bytes = new Uint8Array(8);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, (byte) => ROOM_CODE_ALPHABET[byte & 31]).join('');
+      }
+
+      function orderedRoomMoves(moves = {}) {
+        return Object.keys(moves).sort((a, b) => Number(a) - Number(b)).map((key) => moves[key]);
+      }
 
       // Atmosphere presets for 3D backdrop, fog, lighting mood, and tabletop styling
       const ATMOSPHERES = {
@@ -2698,7 +2747,7 @@
           this.sound = new SoundEngine();
           this.engine = new Connect4Engine();
 
-          this.mode = 'bot'; // 'bot' | 'local'
+          this.mode = 'bot'; // 'bot' | 'local' | 'online'
           this.difficulty = 'smart'; // 'casual' | 'smart' | 'tactical'
           this.starterOption = '1'; // '1' | '2' | 'alternate'
           this.atmosphere = 'midnight';
@@ -2717,6 +2766,14 @@
           this.botTimeoutId = null;
           this.toastTimeoutId = null;
           this.transitionTimerId = null;
+          this.onlineRoomCode = null;
+          this.onlineRoomRef = null;
+          this.onlineRoomData = null;
+          this.stopOnlineListener = null;
+          this.onlineMovePending = false;
+          this.onlineProcessingMoves = false;
+          this.onlineHasStarted = false;
+          this.onlineUser = null;
 
           this.cacheDom();
           this.sceneCtrl = new SceneController(
@@ -2738,7 +2795,18 @@
           this.menuQuickBotBtn = document.getElementById('menu-quick-bot-btn');
           this.menuModeBotBtn = document.getElementById('menu-mode-bot');
           this.menuModeLocalBtn = document.getElementById('menu-mode-local');
+          this.menuModeOnlineBtn = document.getElementById('menu-mode-online');
           this.menuDiffCard = document.getElementById('menu-diff-card');
+          this.menuActions = document.getElementById('menu-actions');
+          this.onlineRoomPanel = document.getElementById('online-room-panel');
+          this.onlineNameInput = document.getElementById('online-name-input');
+          this.onlineRoomCodeInput = document.getElementById('online-room-code-input');
+          this.onlineCreateRoomBtn = document.getElementById('online-create-room-btn');
+          this.onlineJoinRoomBtn = document.getElementById('online-join-room-btn');
+          this.onlineRoomStatus = document.getElementById('online-room-status');
+          this.onlineRoomCodeDisplay = document.getElementById('online-room-code-display');
+          this.onlineRoomCodeValue = document.getElementById('online-room-code-value');
+          this.onlineCopyCodeBtn = document.getElementById('online-copy-code-btn');
           this.menuDiffButtons = Array.from(document.querySelectorAll('.menu-diff-btn'));
           this.menuAtmosphereSelect = document.getElementById('menu-atmosphere-select');
           this.menuSoundBtn = document.getElementById('menu-sound-btn');
@@ -2843,7 +2911,308 @@
           return this.gamesPlayed % 2 === 0 ? P1 : P2;
         }
 
+        setOnlineStatus(message, isError = false) {
+          if (!this.onlineRoomStatus) return;
+          this.onlineRoomStatus.textContent = message;
+          this.onlineRoomStatus.classList.toggle('text-rose-300', isError);
+          this.onlineRoomStatus.classList.toggle('text-slate-300', !isError);
+        }
+
+        setOnlineBusy(busy) {
+          if (this.onlineCreateRoomBtn) this.onlineCreateRoomBtn.disabled = busy;
+          if (this.onlineJoinRoomBtn) this.onlineJoinRoomBtn.disabled = busy;
+        }
+
+        getTemporaryRoomName() {
+          let profile = null;
+          try { profile = getActiveProfile(); } catch {}
+          const suggested = profile?.displayName || profile?.username || '';
+          const raw = this.onlineNameInput?.value.trim() || suggested;
+          return (raw || `Guest ${auth?.currentUser?.uid?.slice(-4) || 'Player'}`).trim().slice(0, 20);
+        }
+
+        async getOnlineIdentity() {
+          if (!firebaseReady || !auth || !realtimeDb) {
+            throw new Error('Firebase is not ready. Check the web app config in firebase-config.js.');
+          }
+          let user = auth.currentUser;
+          if (!user) {
+            const result = await signInAnonymously(auth);
+            user = result.user;
+          }
+          this.onlineUser = user;
+          const name = this.getTemporaryRoomName();
+          if (this.onlineNameInput) this.onlineNameInput.value = name;
+          return { user, name };
+        }
+
+        onlineErrorMessage(error, joining = false) {
+          if (!firebaseReady) return 'Firebase web app config is incomplete. Check firebase-config.js.';
+          if (error?.code === 'auth/operation-not-allowed') return 'Enable Anonymous sign-in in Firebase Authentication to play online.';
+          if (error?.code === 'auth/network-request-failed') return 'Could not reach Firebase. Check your connection and try again.';
+          if (error?.code === 'PERMISSION_DENIED' || error?.code === 'permission-denied') {
+            return joining
+              ? 'Room not found, already full, or database rules are not published yet.'
+              : 'Firebase denied the room request. Check the Connect 4 Realtime Database rules.';
+          }
+          return error?.message || 'Could not connect to the online room. Please try again.';
+        }
+
+        async createOnlineRoom() {
+          this.setOnlineBusy(true);
+          this.setOnlineStatus('Connecting to Firebase and creating a private room…');
+          try {
+            const { user, name } = await this.getOnlineIdentity();
+            for (let attempt = 0; attempt < 6; attempt++) {
+              const code = makeRoomCode();
+              const roomRef = ref(realtimeDb, `connect4Rooms/${code}`);
+              let result;
+              try {
+                result = await runTransaction(roomRef, (current) => {
+                  if (current !== null) return;
+                  return {
+                    hostUid: user.uid,
+                    hostName: name,
+                    status: 'waiting',
+                    currentTurnUid: user.uid,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                  };
+                }, { applyLocally: false });
+              } catch (error) {
+                // A code collision with an occupied, private room is intentionally
+                // unreadable; generate another code and retry.
+                if (error?.code === 'PERMISSION_DENIED' && attempt < 5) continue;
+                throw error;
+              }
+              if (!result.committed) continue;
+
+              this.onlineRoomCode = code;
+              this.onlineRoomRef = roomRef;
+              this.onlineRoomData = result.snapshot.val();
+              this.onlineHasStarted = false;
+              this.onlineRoomCodeValue.textContent = code;
+              this.onlineRoomCodeDisplay.classList.remove('hidden');
+              this.onlineRoomCodeDisplay.classList.add('flex');
+              if (this.onlineNameInput) this.onlineNameInput.disabled = true;
+              this.listenToOnlineRoom(roomRef, code);
+              this.setOnlineStatus('Room created. Share the code with one friend and wait for them to join.');
+              return;
+            }
+            throw new Error('Could not reserve a unique room code. Please try again.');
+          } catch (error) {
+            this.setOnlineStatus(this.onlineErrorMessage(error), true);
+          } finally {
+            this.setOnlineBusy(false);
+          }
+        }
+
+        async joinOnlineRoom() {
+          const code = String(this.onlineRoomCodeInput?.value || '').trim().toUpperCase();
+          if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(code)) {
+            this.setOnlineStatus('Enter the 8-character room code your friend shared.', true);
+            return;
+          }
+          this.setOnlineBusy(true);
+          this.setOnlineStatus('Looking for that room…');
+          try {
+            const { user, name } = await this.getOnlineIdentity();
+            const roomRef = ref(realtimeDb, `connect4Rooms/${code}`);
+            const result = await runTransaction(roomRef, (current) => {
+              if (!current || current.status !== 'waiting' || current.guestUid || current.hostUid === user.uid) return;
+              return {
+                ...current,
+                guestUid: user.uid,
+                guestName: name,
+                status: 'playing',
+                currentTurnUid: current.hostUid,
+                updatedAt: Date.now()
+              };
+            }, { applyLocally: false });
+
+            if (!result.committed) {
+              this.setOnlineStatus('That room is unavailable, already full, or you are already its host.', true);
+              return;
+            }
+
+            this.onlineRoomCode = code;
+            this.onlineRoomRef = roomRef;
+            this.onlineRoomData = result.snapshot.val();
+            this.onlineHasStarted = false;
+            this.onlineRoomCodeDisplay.classList.add('hidden');
+            if (this.onlineNameInput) this.onlineNameInput.disabled = true;
+            this.listenToOnlineRoom(roomRef, code);
+            this.setOnlineStatus('Joined. Starting the match…');
+          } catch (error) {
+            this.setOnlineStatus(this.onlineErrorMessage(error, true), true);
+          } finally {
+            this.setOnlineBusy(false);
+          }
+        }
+
+        listenToOnlineRoom(roomRef, code) {
+          if (this.stopOnlineListener) this.stopOnlineListener();
+          this.stopOnlineListener = onValue(roomRef, (snapshot) => {
+            if (!snapshot.exists()) {
+              this.setOnlineStatus('This room is no longer available.', true);
+              return;
+            }
+            this.onlineRoomData = snapshot.val();
+            this.handleOnlineRoomUpdate(code);
+          }, (error) => {
+            this.setOnlineStatus(this.onlineErrorMessage(error, true), true);
+          });
+        }
+
+        handleOnlineRoomUpdate(code) {
+          const room = this.onlineRoomData;
+          if (!room || code !== this.onlineRoomCode) return;
+          if (room.status === 'waiting') {
+            this.setOnlineStatus(`Room ${code} is ready. Waiting for another player to join…`);
+            return;
+          }
+          if (room.status !== 'playing' && room.status !== 'finished') return;
+
+          if (!this.onlineHasStarted) {
+            this.onlineHasStarted = true;
+            this.mode = 'online';
+            this.starterOption = '1'; // The room creator is Red and always starts.
+            if (this.p1Label) this.p1Label.textContent = `${room.hostName} · Red`;
+            if (this.p2Label) this.p2Label.textContent = `${room.guestName} · Gold`;
+            this.syncMenuControls();
+            if (this.inMainMenu) this.launchFromMenu();
+          }
+          this.drainOnlineMoves();
+        }
+
+        async drainOnlineMoves() {
+          if (this.onlineProcessingMoves || !this.onlineRoomData) return;
+          this.onlineProcessingMoves = true;
+          try {
+            while (this.onlineRoomData && this.engine.history.length < orderedRoomMoves(this.onlineRoomData.moves).length) {
+              const room = this.onlineRoomData;
+              const moves = orderedRoomMoves(room.moves);
+              const index = this.engine.history.length;
+              const move = moves[index];
+              const expectedUid = index % 2 === 0 ? room.hostUid : room.guestUid;
+              const column = Number(move?.column);
+              if (!move || move.uid !== expectedUid || !Number.isInteger(column) || column < 0 || column >= COLS) {
+                throw new Error('The room contains an invalid move and was stopped for safety.');
+              }
+
+              const outcome = this.engine.makeMove(column);
+              if (!outcome) throw new Error('The room move could not be applied to the board.');
+              this.onlineMovePending = false;
+              this.isAnimatingMove = true;
+              this.updateHUD();
+              await new Promise((resolve) => this.sceneCtrl.dropDisc(outcome.row, outcome.col, outcome.player, resolve));
+              this.isAnimatingMove = false;
+
+              if (outcome.gameOver) {
+                this.handleGameOver(outcome);
+              } else {
+                this.updateHUD();
+              }
+            }
+            const latest = this.onlineRoomData;
+            if (latest?.status === 'finished' && !this.engine.gameOver) {
+              throw new Error('The room ended with a board state that does not match its move history.');
+            }
+            this.onlineMovePending = false;
+            if (latest?.status === 'waiting') this.setOnlineStatus(`Room ${this.onlineRoomCode} is ready. Waiting for another player to join…`);
+            else if (latest?.status === 'playing') this.setOnlineStatus('Connected. Your room is live.');
+            else if (latest?.status === 'finished') this.setOnlineStatus('This room’s game is finished. Create a new room to play again.');
+            this.updateHUD();
+          } catch (error) {
+            this.onlineMovePending = false;
+            this.isAnimatingMove = false;
+            this.setOnlineStatus(error.message || 'Could not sync the room state.', true);
+            this.showToast(error.message || 'Could not sync the online match.');
+            this.updateHUD();
+          } finally {
+            this.onlineProcessingMoves = false;
+            if (this.onlineRoomData && this.engine.history.length < orderedRoomMoves(this.onlineRoomData.moves).length) {
+              this.drainOnlineMoves();
+            }
+          }
+        }
+
+        async submitOnlineMove(col) {
+          if (!this.onlineRoomRef || !this.onlineRoomData || this.onlineMovePending) return;
+          const user = auth?.currentUser;
+          if (!user || this.onlineRoomData.currentTurnUid !== user.uid) return;
+          this.onlineMovePending = true;
+          this.isAnimatingMove = true;
+          this.updateHUD();
+          try {
+            const result = await runTransaction(this.onlineRoomRef, (current) => {
+              if (!current || current.status !== 'playing' || current.currentTurnUid !== user.uid) return;
+              const oldMoves = orderedRoomMoves(current.moves);
+              if (oldMoves.length !== this.engine.history.length || oldMoves.length >= ROWS * COLS) return;
+
+              const replay = new Connect4Engine();
+              replay.reset(P1);
+              for (let index = 0; index < oldMoves.length; index++) {
+                const item = oldMoves[index];
+                const expectedUid = index % 2 === 0 ? current.hostUid : current.guestUid;
+                if (!item || item.uid !== expectedUid || !Number.isInteger(Number(item.column))) return;
+                if (!replay.makeMove(Number(item.column))) return;
+              }
+              if (replay.gameOver || replay.currentPlayer !== (user.uid === current.hostUid ? P1 : P2)) return;
+              const outcome = replay.makeMove(col);
+              if (!outcome) return;
+
+              const moves = { ...(current.moves || {}) };
+              moves[String(oldMoves.length)] = { uid: user.uid, column: col, createdAt: Date.now() };
+              const next = {
+                ...current,
+                moves,
+                status: outcome.gameOver ? 'finished' : 'playing',
+                currentTurnUid: outcome.gameOver ? null : (user.uid === current.hostUid ? current.guestUid : current.hostUid),
+                updatedAt: Date.now()
+              };
+              if (outcome.gameOver && !outcome.isDraw) next.winnerUid = user.uid;
+              else delete next.winnerUid;
+              return next;
+            }, { applyLocally: false });
+
+            if (!result.committed) {
+              this.onlineMovePending = false;
+              this.isAnimatingMove = false;
+              this.setOnlineStatus('That move was not accepted. The room may have advanced; wait for the board to sync.', true);
+              this.updateHUD();
+            }
+          } catch (error) {
+            this.onlineMovePending = false;
+            this.isAnimatingMove = false;
+            this.setOnlineStatus(this.onlineErrorMessage(error), true);
+            this.updateHUD();
+          }
+        }
+
+        stopOnlineRoomListener() {
+          if (this.stopOnlineListener) this.stopOnlineListener();
+          this.stopOnlineListener = null;
+          this.onlineRoomRef = null;
+          this.onlineRoomData = null;
+          this.onlineRoomCode = null;
+          this.onlineHasStarted = false;
+          this.onlineMovePending = false;
+          this.onlineProcessingMoves = false;
+          if (this.onlineNameInput) this.onlineNameInput.disabled = false;
+          if (this.onlineRoomCodeDisplay) {
+            this.onlineRoomCodeDisplay.classList.add('hidden');
+            this.onlineRoomCodeDisplay.classList.remove('flex');
+          }
+        }
+
         enterMainMenu(initial = false) {
+          if (this.mode === 'online') {
+            this.stopOnlineRoomListener();
+            this.mode = 'bot';
+            if (this.p1Label) this.p1Label.textContent = 'P1';
+            if (this.p2Label) this.p2Label.textContent = 'Bot';
+          }
           clearTimeout(this.botTimeoutId);
           clearTimeout(this.transitionTimerId);
           this.isBotThinking = false;
@@ -2880,6 +3249,10 @@
 
         launchFromMenu() {
           if (this.isTransitioning) return;
+          if (this.mode === 'online' && this.onlineRoomData?.status !== 'playing') {
+            this.setOnlineStatus('Create a room or join a friend before starting.');
+            return;
+          }
           this.sound.ensureContext();
           this.sound.playTransitionSweep(true);
 
@@ -2901,7 +3274,7 @@
           }, 380);
 
           this.gamesPlayed = 0;
-          const firstPlayer = this.resolveStarterPlayer();
+          const firstPlayer = this.mode === 'online' ? P1 : this.resolveStarterPlayer();
           this.engine.reset(firstPlayer);
           this.sceneCtrl.clearBoardDiscs();
           this.updateHUD();
@@ -2909,20 +3282,20 @@
         }
 
         syncMenuControls() {
-          if (this.menuModeBotBtn && this.menuModeLocalBtn) {
-            if (this.mode === 'bot') {
-              this.menuModeBotBtn.className =
-                'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm';
-              this.menuModeLocalBtn.className =
-                'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
-              if (this.menuDiffCard) this.menuDiffCard.classList.remove('opacity-45', 'pointer-events-none');
-            } else {
-              this.menuModeLocalBtn.className =
-                'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm';
-              this.menuModeBotBtn.className =
-                'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
-              if (this.menuDiffCard) this.menuDiffCard.classList.add('opacity-45', 'pointer-events-none');
-            }
+          const activeMenuClass = 'hud-btn py-2 px-2 rounded-xl text-[11px] font-semibold bg-indigo-500 text-white shadow-sm';
+          const idleMenuClass = 'hud-btn py-2 px-2 rounded-xl text-[11px] font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+          if (this.menuModeBotBtn) this.menuModeBotBtn.className = this.mode === 'bot' ? 'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm' : 'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+          if (this.menuModeLocalBtn) this.menuModeLocalBtn.className = this.mode === 'local' ? 'hud-btn py-2 px-2.5 rounded-xl text-xs font-semibold bg-indigo-500 text-white shadow-sm' : 'hud-btn py-2 px-2.5 rounded-xl text-xs font-medium bg-white/5 text-slate-300 hover:text-white border border-white/10';
+          if (this.menuModeOnlineBtn) this.menuModeOnlineBtn.className = this.mode === 'online' ? activeMenuClass : idleMenuClass;
+          if (this.menuDiffCard) this.menuDiffCard.classList.toggle('opacity-45', this.mode !== 'bot');
+          if (this.menuDiffCard) this.menuDiffCard.classList.toggle('pointer-events-none', this.mode !== 'bot');
+          if (this.onlineRoomPanel) this.onlineRoomPanel.classList.toggle('hidden', this.mode !== 'online');
+          if (this.menuActions) this.menuActions.classList.toggle('hidden', this.mode === 'online');
+          if (this.mode === 'online' && this.onlineNameInput && !this.onlineNameInput.value) {
+            try {
+              const profile = getActiveProfile();
+              this.onlineNameInput.value = (profile?.displayName || profile?.username || '').slice(0, 20);
+            } catch {}
           }
 
           this.menuDiffButtons.forEach((btn) => {
@@ -2944,6 +3317,10 @@
         }
 
         startNewGame(initial = false) {
+          if (this.mode === 'online') {
+            this.showToast('For another online game, return to the menu and create a new room.');
+            return;
+          }
           if (this.isTransitioning || this.inMainMenu) return;
 
           clearTimeout(this.botTimeoutId);
@@ -2989,6 +3366,10 @@
         }
 
         setMode(newMode) {
+          if (this.mode === 'online') {
+            this.showToast('Finish or leave the online room before changing modes.');
+            return;
+          }
           if (this.mode === newMode || this.isTransitioning) return;
           this.mode = newMode;
 
@@ -3028,6 +3409,7 @@
         isHumanTurn() {
           if (this.inMainMenu || this.engine.gameOver || this.isAnimatingMove || this.isBotThinking || this.isTransitioning) return false;
           if (this.mode === 'local') return true;
+          if (this.mode === 'online') return Boolean(auth?.currentUser && this.onlineRoomData?.status === 'playing' && this.onlineRoomData.currentTurnUid === auth.currentUser.uid && !this.onlineMovePending);
           return this.engine.currentPlayer === P1;
         }
 
@@ -3043,6 +3425,11 @@
         executeMove(col) {
           const targetRow = this.engine.getLowestAvailableRow(this.engine.board, col);
           if (targetRow === -1 || this.engine.gameOver) return;
+
+          if (this.mode === 'online') {
+            this.submitOnlineMove(col);
+            return;
+          }
 
           const outcome = this.engine.makeMove(col);
           if (!outcome) return;
@@ -3096,7 +3483,7 @@
             this.resultBadge.textContent = 'Victory';
             this.resultBadge.className =
               'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30 mb-2';
-            this.resultTitle.textContent = this.mode === 'bot' ? 'You Win!' : 'Player 1 (Red) Wins!';
+            this.resultTitle.textContent = this.mode === 'bot' ? 'You Win!' : this.mode === 'online' ? `${this.onlineRoomData?.hostName || 'Red'} Wins!` : 'Player 1 (Red) Wins!';
             this.resultSubtitle.textContent = 'Four connected in a row — winning discs & beam illuminated.';
           } else if (outcome.winner === P2) {
             this.scores.p2++;
@@ -3106,7 +3493,7 @@
             this.resultBadge.textContent = this.mode === 'bot' ? 'Bot Victory' : 'Victory';
             this.resultBadge.className =
               'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30 mb-2';
-            this.resultTitle.textContent = this.mode === 'bot' ? 'Bot Wins!' : 'Player 2 (Gold) Wins!';
+            this.resultTitle.textContent = this.mode === 'bot' ? 'Bot Wins!' : this.mode === 'online' ? `${this.onlineRoomData?.guestName || 'Gold'} Wins!` : 'Player 2 (Gold) Wins!';
             this.resultSubtitle.textContent = 'Four connected in a row — winning discs & beam illuminated.';
           } else {
             this.scores.draws++;
@@ -3124,6 +3511,10 @@
         }
 
         handleUndo() {
+          if (this.mode === 'online') {
+            this.showToast('Undo is disabled during online matches so both boards stay in sync.');
+            return;
+          }
           if (this.isAnimatingMove || this.isTransitioning || this.engine.history.length === 0) return;
 
           clearTimeout(this.botTimeoutId);
@@ -3180,6 +3571,11 @@
           } else if (this.mode === 'bot') {
             this.turnStatusText.textContent = 'Your Turn (Red)';
             this.turnSubText.textContent = 'Click a column or press 1–7';
+          } else if (this.mode === 'online') {
+            const yourTurn = Boolean(auth?.currentUser && this.onlineRoomData?.currentTurnUid === auth.currentUser.uid);
+            const activeName = isRed ? (this.onlineRoomData?.hostName || 'Red') : (this.onlineRoomData?.guestName || 'Gold');
+            this.turnStatusText.textContent = this.onlineMovePending ? 'Sending move…' : yourTurn ? `Your Turn (${activeName})` : `${activeName}'s Turn`;
+            this.turnSubText.textContent = this.onlineMovePending ? 'Waiting for the room to confirm' : yourTurn ? 'Your move is live in this room' : 'Waiting for the other player';
           } else {
             this.turnStatusText.textContent = isRed ? 'Player 1 Turn (Red)' : 'Player 2 Turn (Gold)';
             this.turnSubText.textContent = 'Pass & play — click column or press 1–7';
@@ -3188,13 +3584,13 @@
           this.sceneCtrl.setActivePlayer(player);
           this.sceneCtrl.setInputEnabled(this.isHumanTurn());
           if (this.undoBtn) {
-            this.undoBtn.disabled = this.isAnimatingMove || this.isTransitioning || this.engine.history.length === 0;
+            this.undoBtn.disabled = this.mode === 'online' || this.isAnimatingMove || this.isTransitioning || this.engine.history.length === 0;
           }
           if (this.newGameBtn) {
-            this.newGameBtn.disabled = this.isTransitioning;
+            this.newGameBtn.disabled = this.mode === 'online' || this.isTransitioning;
           }
           if (this.playAgainBtn) {
-            this.playAgainBtn.disabled = this.isTransitioning;
+            this.playAgainBtn.disabled = this.mode === 'online' || this.isTransitioning;
           }
         }
 
@@ -3226,6 +3622,37 @@
               this.difficultyGroup.classList.add('hidden');
               this.syncMenuControls();
               this.sound.playSelectTick(4);
+            });
+          }
+          if (this.menuModeOnlineBtn) {
+            this.menuModeOnlineBtn.addEventListener('click', () => {
+              this.mode = 'online';
+              this.difficultyGroup.classList.add('hidden');
+              this.syncMenuControls();
+              if (!firebaseReady) this.setOnlineStatus('Firebase config is incomplete. Check firebase-config.js.', true);
+              else this.setOnlineStatus('Choose a temporary name, then create a room or join with a code.');
+              this.sound.playSelectTick(4);
+            });
+          }
+          if (this.onlineCreateRoomBtn) this.onlineCreateRoomBtn.addEventListener('click', () => this.createOnlineRoom());
+          if (this.onlineJoinRoomBtn) this.onlineJoinRoomBtn.addEventListener('click', () => this.joinOnlineRoom());
+          if (this.onlineRoomCodeInput) {
+            this.onlineRoomCodeInput.addEventListener('input', () => {
+              this.onlineRoomCodeInput.value = this.onlineRoomCodeInput.value.toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g, '').slice(0, 8);
+            });
+            this.onlineRoomCodeInput.addEventListener('keydown', (event) => {
+              if (event.key === 'Enter') this.joinOnlineRoom();
+            });
+          }
+          if (this.onlineCopyCodeBtn) {
+            this.onlineCopyCodeBtn.addEventListener('click', async () => {
+              if (!this.onlineRoomCode) return;
+              try {
+                await navigator.clipboard.writeText(this.onlineRoomCode);
+                this.setOnlineStatus('Room code copied. Send it to your friend.');
+              } catch {
+                this.setOnlineStatus(`Share room code ${this.onlineRoomCode} with your friend.`);
+              }
             });
           }
           this.menuDiffButtons.forEach((btn) => {
@@ -3298,6 +3725,10 @@
 
           if (this.resetScoresBtn) {
             this.resetScoresBtn.addEventListener('click', () => {
+              if (this.mode === 'online') {
+                this.showToast('Online room scores are local to each match.');
+                return;
+              }
               if (this.isTransitioning) return;
               this.scores = { p1: 0, p2: 0, draws: 0 };
               this.gamesPlayed = 0;
@@ -3334,7 +3765,7 @@
             if (this.inMainMenu) {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                this.launchFromMenu();
+                if (this.mode !== 'online') this.launchFromMenu();
               }
               return;
             }
