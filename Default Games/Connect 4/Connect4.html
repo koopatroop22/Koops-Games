@@ -2959,10 +2959,10 @@
           if (!firebaseReady) return 'Firebase web app config is incomplete. Check firebase-config.js.';
           if (error?.code === 'auth/operation-not-allowed') return 'Enable Anonymous sign-in in Firebase Authentication to play online.';
           if (error?.code === 'auth/network-request-failed') return 'Could not reach Firebase. Check your connection and try again.';
-          if (error?.code === 'PERMISSION_DENIED' || error?.code === 'permission-denied') {
+          if (['PERMISSION_DENIED', 'permission-denied', 'permission_denied'].includes(error?.code)) {
             return joining
-              ? 'Room not found, already full, or database rules are not published yet.'
-              : 'Firebase denied the room request. Check the Connect 4 Realtime Database rules.';
+              ? 'Firebase denied access. Check that the Connect 4 rules are published to this database; if they are, the room code may be invalid or full.'
+              : 'Firebase denied access. Check Anonymous sign-in and confirm the Connect 4 Realtime Database rules are published to this database.';
           }
           return error?.message || 'Could not connect to the online room. Please try again.';
         }
@@ -2975,26 +2975,18 @@
             for (let attempt = 0; attempt < 6; attempt++) {
               const code = makeRoomCode();
               const roomRef = ref(realtimeDb, `connect4Rooms/${code}`);
-              let result;
-              try {
-                result = await runTransaction(roomRef, (current) => {
-                  if (current !== null) return;
-                  return {
-                    hostUid: user.uid,
-                    hostName: name,
-                    status: 'waiting',
-                    currentTurnUid: user.uid,
-                    moveCount: 0,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                  };
-                }, { applyLocally: false });
-              } catch (error) {
-                // A code collision with an occupied, private room is intentionally
-                // unreadable; generate another code and retry.
-                if (error?.code === 'PERMISSION_DENIED' && attempt < 5) continue;
-                throw error;
-              }
+              const result = await runTransaction(roomRef, (current) => {
+                if (current !== null) return;
+                return {
+                  hostUid: user.uid,
+                  hostName: name,
+                  status: 'waiting',
+                  currentTurnUid: user.uid,
+                  moveCount: 0,
+                  createdAt: Date.now(),
+                  updatedAt: Date.now()
+                };
+              }, { applyLocally: false });
               if (!result.committed) continue;
 
               this.onlineRoomCode = code;
