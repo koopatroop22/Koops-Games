@@ -311,6 +311,14 @@
           >
             Quick Duel (Tactical Bot)
           </button>
+
+          <button
+            id="menu-host-online-btn"
+            type="button"
+            class="hud-btn py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-bold bg-emerald-300/15 hover:bg-emerald-300/25 text-emerald-100 border border-emerald-200/30"
+          >
+            Host Online Room
+          </button>
         </div>
 
         <!-- Compact Controls & Rules Strip -->
@@ -2793,6 +2801,7 @@
           this.mainMenuOverlay = document.getElementById('main-menu-overlay');
           this.menuStartBtn = document.getElementById('menu-start-btn');
           this.menuQuickBotBtn = document.getElementById('menu-quick-bot-btn');
+          this.menuHostOnlineBtn = document.getElementById('menu-host-online-btn');
           this.menuModeBotBtn = document.getElementById('menu-mode-bot');
           this.menuModeLocalBtn = document.getElementById('menu-mode-local');
           this.menuModeOnlineBtn = document.getElementById('menu-mode-online');
@@ -3604,6 +3613,19 @@
               this.setDifficulty('tactical');
               this.syncMenuControls();
               this.launchFromMenu();
+            });
+          }
+          if (this.menuHostOnlineBtn) {
+            this.menuHostOnlineBtn.addEventListener('click', () => {
+              this.mode = 'online';
+              this.difficultyGroup.classList.add('hidden');
+              this.syncMenuControls();
+              this.sound.playSelectTick(4);
+              if (!firebaseReady) {
+                this.setOnlineStatus('Firebase config is incomplete. Check firebase-config.js.', true);
+                return;
+              }
+              this.createOnlineRoom();
             });
           }
           if (this.menuModeBotBtn) {
