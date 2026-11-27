@@ -3,6 +3,8 @@
      * Main game controller. Board data, layout and gameplay systems are kept in
      * named sections so they can be edited without searching through the HTML.
      */
+    import { MonopolyOnline } from './monopoly-online.js';
+
     (function () {
       "use strict";
 
@@ -935,16 +937,330 @@
         extraTurn: false,
         bankruptcyAnimating: false,
         mapId: "christchurch",
-        houseRules: { freeParking: false, auctions: true, doubleGo: false, startingCash: 1500 }
+        houseRules: { freeParking: false, auctions: true, doubleGo: false, startingCash: 1500 },
+        onlineMode: false,
+        applyingOnlineState: false,
+        onlineSyncTimer: null,
+        onlineLastRevision: 0,
+        onlineRoom: null,
+        onlineStartedFromRoom: false,
+        onlineLocalSetupBackup: null,
+        seenTradeRequests: new Set(),
+        processedTradeRequests: new Set(),
+        seenAuctionPrompts: new Set(),
+        processedAuctionResponses: new Set(),
+        onlineAuctionCallbacks: new Map()
       };
+
+      const monopolyOnline = new MonopolyOnline({
+        onRoom: receiveOnlineRoom,
+        onError: (message) => setOnlineStatus(message, true)
+      });
+
+      function setOnlineStatus(message, isError = false) {
+        const el = document.getElementById("online-room-status");
+        if (!el) return;
+        el.textContent = message;
+        el.classList.toggle("text-rose-300", isError);
+        el.classList.toggle("text-slate-300", !isError);
+      }
+
+      function getOnlineSeats(room) {
+        return [1, 2, 3, 4].map((seat) => room?.players?.[`seat${seat}`]).filter(Boolean);
+      }
+
+      function getOnlineSettings() {
+        return { mapId: game.mapId, houseRules: { ...game.houseRules } };
+      }
+
+      function backupLocalSetup() {
+        if (game.onlineLocalSetupBackup) return;
+        game.onlineLocalSetupBackup = {
+          playerCount: game.playerCount,
+          setupConfigs: game.setupConfigs.map((player) => ({ ...player })),
+          mapId: game.mapId,
+          houseRules: { ...game.houseRules }
+        };
+      }
+
+      function restoreLocalSetup() {
+        const backup = game.onlineLocalSetupBackup;
+        if (!backup) return;
+        game.playerCount = backup.playerCount;
+        game.setupConfigs = backup.setupConfigs;
+        game.mapId = backup.mapId;
+        game.houseRules = backup.houseRules;
+        game.onlineLocalSetupBackup = null;
+        renderSetupRows();
+        document.querySelectorAll(".map-choice").forEach((choice) => {
+          choice.classList.toggle("active-map", choice.dataset.map === game.mapId);
+          choice.setAttribute("aria-pressed", String(choice.dataset.map === game.mapId));
+        });
+        document.getElementById("selected-map-label").textContent = MAP_THEMES[game.mapId].label;
+        document.getElementById("board-map-name").textContent = MAP_THEMES[game.mapId].label;
+        document.getElementById("rule-free-parking").checked = game.houseRules.freeParking;
+        document.getElementById("rule-auctions").checked = game.houseRules.auctions;
+        document.getElementById("rule-double-go").checked = game.houseRules.doubleGo;
+        document.getElementById("rule-start-cash").value = game.houseRules.startingCash;
+        document.getElementById("house-rules-preset").value = "custom";
+        document.getElementById("starting-cash-summary").textContent = `Starting cash: £${game.houseRules.startingCash}`;
+        applyMapTheme(game.mapId);
+      }
+
+      function renderOnlineRoom(room) {
+        game.onlineRoom = room;
+        const code = room.code || monopolyOnline.code || "";
+        const label = document.getElementById("online-room-code-label");
+        const value = document.getElementById("online-room-code-value");
+        const members = document.getElementById("online-room-members");
+        const startBtn = document.getElementById("online-start-btn");
+        const hostBtn = document.getElementById("online-host-btn");
+        const joinBtn = document.getElementById("online-join-btn");
+        const copyBtn = document.getElementById("online-copy-btn");
+        const leaveBtn = document.getElementById("online-leave-btn");
+        if (label && code) label.classList.remove("hidden");
+        if (value) value.textContent = code;
+        if (copyBtn) copyBtn.classList.toggle("hidden", !code);
+        if (leaveBtn) leaveBtn.classList.toggle("hidden", !code);
+        if (hostBtn) hostBtn.disabled = Boolean(code);
+        if (joinBtn) joinBtn.disabled = Boolean(code);
+        document.querySelectorAll(".map-choice, #house-rules-preset, #rule-free-parking, #rule-auctions, #rule-double-go, #rule-start-cash").forEach((input) => { input.disabled = Boolean(code); });
+        if (members) {
+          const seats = getOnlineSeats(room);
+          members.innerHTML = [1, 2, 3, 4].map((seat) => {
+            const player = seats.find((p) => p.seat === seat);
+            return `<div class="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-200"><span class="text-sky-300 font-bold">Seat ${seat}</span><span class="ml-2">${player ? escapeHtml(player.name) : "Waiting for player…"}</span>${player ? `<span class="ml-2 text-[10px] ${player.connected === false ? "text-rose-300" : "text-emerald-300"}">${player.connected === false ? "OFFLINE" : "ONLINE"}</span>` : ""}${player?.uid === room.hostUid ? '<span class="float-right text-amber-200">HOST</span>' : ""}</div>`;
+          }).join("");
+        }
+        if (startBtn) {
+          startBtn.classList.toggle("hidden", !monopolyOnline.isHost || room.status !== "waiting");
+          startBtn.disabled = getOnlineSeats(room).length < 2;
+        }
+        if (room.status === "waiting") setOnlineStatus(`${getOnlineSeats(room).length}/4 players joined. The host can start with at least 2.`);
+        else if (room.status === "playing") setOnlineStatus(`Room ${code} is in progress. Rejoin with this code if you refresh.`);
+      }
+
+      function serializeOnlineState() {
+        return {
+          revision: game.onlineLastRevision,
+          turnIndex: game.turnIndex,
+          turnUid: game.players[game.turnIndex]?.uid || null,
+          hasRolled: game.hasRolled,
+          lastDice: [...game.lastDice],
+          parkingPot: game.parkingPot,
+          consecutiveDoubles: game.consecutiveDoubles,
+          extraTurn: game.extraTurn,
+          mapId: game.mapId,
+          houseRules: { ...game.houseRules },
+          logs: game.logs.slice(0, 25),
+          winnerUid: game.winnerUid || null,
+          players: game.players.map((player) => ({
+            uid: player.uid, id: player.id, name: player.name, teamId: player.teamId,
+            charId: player.charId, cash: player.cash, pos: player.pos, inJail: player.inJail,
+            jailTurns: player.jailTurns || 0, jailCards: player.jailCards || 0,
+            jailChoiceMade: Boolean(player.jailChoiceMade), bankrupt: Boolean(player.bankrupt),
+            debtCreditorId: player.debtCreditorId || null
+          })),
+          tiles: BOARD_TILES.map((tile) => ({ ownerId: tile.ownerId, houses: tile.houses || 0, mortgaged: Boolean(tile.mortgaged) }) )
+        };
+      }
+
+      function scheduleOnlinePublish() {
+        if (!game.onlineMode || game.applyingOnlineState || !game.started) return;
+        clearTimeout(game.onlineSyncTimer);
+        game.onlineSyncTimer = setTimeout(async () => {
+          try {
+            const published = await monopolyOnline.publishState(serializeOnlineState());
+            if (published) game.onlineLastRevision = Number(published.revision) || game.onlineLastRevision;
+          } catch (error) {
+            setOnlineStatus(error.message || "Could not sync this turn.", true);
+          }
+        }, 550);
+      }
+
+      function applyOnlineState(state) {
+        if (!state || Number(state.revision) <= game.onlineLastRevision) return;
+        game.applyingOnlineState = true;
+        game.onlineLastRevision = Number(state.revision) || game.onlineLastRevision;
+        game.turnIndex = Number(state.turnIndex) || 0;
+        game.hasRolled = Boolean(state.hasRolled);
+        game.lastDice = Array.isArray(state.lastDice) ? state.lastDice.slice(0, 2) : [0, 0];
+        game.parkingPot = Number(state.parkingPot) || 0;
+        game.consecutiveDoubles = Number(state.consecutiveDoubles) || 0;
+        game.extraTurn = Boolean(state.extraTurn);
+        game.mapId = state.mapId || game.mapId;
+        game.houseRules = { ...game.houseRules, ...(state.houseRules || {}) };
+        game.logs = Array.isArray(state.logs) ? state.logs.slice(0, 25) : [];
+        const logEl = document.getElementById("event-log");
+        logEl.innerHTML = game.logs.map((entry) => `<div class="${safeLogClass(entry.colorClass)} leading-snug">• ${escapeHtml(entry.msg)}</div>`).join("");
+        game.winnerUid = state.winnerUid || null;
+        applyMapTheme(game.mapId);
+
+        const currentByUid = new Map(game.players.map((player) => [player.uid, player]));
+        const newlyBankrupt = [];
+        game.players = (state.players || []).map((saved) => {
+          const player = currentByUid.get(saved.uid);
+          const mesh = player?.mesh || createCharacterMesh(CHARACTER_STYLES.find((style) => style.id === saved.charId) || CHARACTER_STYLES[0]);
+          if (!player) scene.add(mesh);
+          if (player && saved.bankrupt && !player.bankrupt) newlyBankrupt.push(mesh);
+          mesh.visible = !saved.bankrupt;
+          return { ...player, ...saved, isBot: false, animatingStep: false, mesh };
+        });
+        for (let i = 0; i < BOARD_TILES.length; i++) {
+          const saved = state.tiles?.[i];
+          BOARD_TILES[i].ownerId = saved?.ownerId || null;
+          BOARD_TILES[i].houses = Number(saved?.houses) || 0;
+          BOARD_TILES[i].mortgaged = Boolean(saved?.mortgaged);
+        }
+        updateTokenPositions();
+        refreshBoardVisuals();
+        updateHUD();
+        game.applyingOnlineState = false;
+        newlyBankrupt.forEach((mesh) => {
+          mesh.visible = true;
+          launchBankruptcyJump({ mesh }, () => {});
+        });
+        if (game.winnerUid && !game.onlineWinnerShown) {
+          game.onlineWinnerShown = true;
+          const winner = game.players.find((player) => player.uid === game.winnerUid);
+          openModal("Match Complete", `${winner?.name || "A player"} Wins!`, "BCP Monopoly 3D Championship", "The online match has ended.", [{ label: "Close", cls: "bg-emerald-400 text-slate-950" }]);
+        }
+      }
+
+      function receiveOnlineRoom(room) {
+        renderOnlineRoom(room);
+        if (room.status !== "playing" || !room.state) {
+          handleOnlineTradeUpdates(room);
+          handleOnlineAuctionUpdates(room);
+          return;
+        }
+        if (!game.onlineStartedFromRoom) {
+          game.onlineStartedFromRoom = true;
+          backupLocalSetup();
+          game.onlineMode = true;
+          game.playerCount = getOnlineSeats(room).length;
+          game.mapId = room.settings?.mapId || "christchurch";
+          game.houseRules = { ...game.houseRules, ...(room.settings?.houseRules || {}) };
+          document.getElementById("board-map-name").textContent = MAP_THEMES[game.mapId]?.label || game.mapId;
+          game.setupConfigs = getOnlineSeats(room).map((player, index) => ({
+            uid: player.uid, name: player.name, isBot: false,
+            teamId: ["Alpha", "Beta", "Gamma", "Delta"][index],
+            charId: ["scholar", "sailor", "ranger", "pilot"][index]
+          }));
+          startNewMatch(game.setupConfigs);
+          game.onlineLastRevision = -1;
+          applyOnlineState({ ...room.state, revision: 0 });
+          const setup = document.getElementById("setup-modal");
+          setup.classList.add("hidden");
+          document.getElementById("game-hud").classList.remove("hidden");
+          document.getElementById("bottom-hud").classList.remove("hidden");
+          game.onlineLastRevision = Number(room.state.revision) || 0;
+          handleOnlineTradeUpdates(room);
+          handleOnlineAuctionUpdates(room);
+          return;
+        }
+        applyOnlineState(room.state);
+        handleOnlineTradeUpdates(room);
+        handleOnlineAuctionUpdates(room);
+      }
+
+      function handleOnlineAuctionUpdates(room) {
+        const uid = monopolyOnline.user?.uid;
+        if (!uid || !room?.auctionPrompts) return;
+        const responses = room.auctionResponses || {};
+        for (const [promptId, prompt] of Object.entries(room.auctionPrompts)) {
+          if (prompt.targetUid === uid && !responses[promptId] && !game.seenAuctionPrompts.has(promptId)) {
+            game.seenAuctionPrompts.add(promptId);
+            const player = game.players.find((entry) => entry.uid === uid);
+            openModal("Property Auction", `Bid on ${escapeHtml(prompt.tileName)}?`, `Current bid £${prompt.highBid}. Your next bid is £${prompt.minimum}.`, `<p>Your cash: £${player?.cash ?? "—"}.</p>`, [
+              { label: `Bid £${prompt.minimum}`, cls: "bg-emerald-400 text-slate-950", disabled: !player || player.cash < prompt.minimum, onClick: async () => {
+                try { await monopolyOnline.respondToAuction(promptId, true); }
+                catch (error) { setOnlineStatus(error.message || "Could not send your auction bid.", true); }
+              } },
+              { label: "Pass", cls: "bg-white/15 text-white", onClick: async () => {
+                try { await monopolyOnline.respondToAuction(promptId, false); }
+                catch (error) { setOnlineStatus(error.message || "Could not pass in the auction.", true); }
+              } }
+            ]);
+          }
+
+          const response = responses[promptId];
+          const callback = game.onlineAuctionCallbacks.get(promptId);
+          if (prompt.hostTurnUid === uid && response && callback && !game.processedAuctionResponses.has(promptId)) {
+            game.processedAuctionResponses.add(promptId);
+            game.onlineAuctionCallbacks.delete(promptId);
+            callback(Boolean(response.raise));
+          }
+        }
+      }
+
+      function handleOnlineTradeUpdates(room) {
+        const uid = monopolyOnline.user?.uid;
+        if (!uid || !room?.tradeRequests) return;
+        const responses = room.tradeResponses || {};
+        for (const [requestId, offer] of Object.entries(room.tradeRequests)) {
+          if (offer.targetUid === uid && !responses[requestId] && !game.seenTradeRequests.has(requestId)) {
+            game.seenTradeRequests.add(requestId);
+            const give = (offer.giveTiles || []).map((id) => BOARD_TILES[Number(id)]?.name).filter(Boolean).join(", ") || "no properties";
+            const get = (offer.getTiles || []).map((id) => BOARD_TILES[Number(id)]?.name).filter(Boolean).join(", ") || "no properties";
+            const details = `<p><strong>${escapeHtml(offer.offererName || "A player")} offers:</strong> £${Number(offer.giveCash) || 0} and ${escapeHtml(give)}.</p><p class="mt-2"><strong>In exchange:</strong> £${Number(offer.getCash) || 0} and ${escapeHtml(get)}.</p>`;
+            openModal("Online Trade Offer", "A player has sent you a trade", "Accept or decline. The proposer will apply the trade if the assets are still available.", details, [
+              { label: "Accept Trade", cls: "bg-emerald-400 text-slate-950", onClick: async () => {
+                try { await monopolyOnline.respondToTrade(requestId, true); setOnlineStatus("Trade accepted. Waiting for the proposer to apply it."); }
+                catch (error) { setOnlineStatus(error.message || "Could not respond to the trade.", true); }
+              } },
+              { label: "Decline", cls: "bg-white/15 text-white", onClick: async () => {
+                try { await monopolyOnline.respondToTrade(requestId, false); }
+                catch (error) { setOnlineStatus(error.message || "Could not respond to the trade.", true); }
+              } }
+            ]);
+          }
+
+          const response = responses[requestId];
+          if (offer.offererUid !== uid || !response || game.processedTradeRequests.has(requestId)) continue;
+          game.processedTradeRequests.add(requestId);
+          const activePlayer = game.players.find((player) => player.uid === offer.offererUid);
+          const targetPlayer = game.players.find((player) => player.uid === offer.targetUid);
+          const giveTiles = (offer.giveTiles || []).map(Number);
+          const getTiles = (offer.getTiles || []).map(Number);
+          const roomTurnStillOurs = room.state?.turnUid === offer.offererUid;
+          const valid = roomTurnStillOurs && activePlayer && targetPlayer &&
+            activePlayer.cash >= offer.giveCash && targetPlayer.cash >= offer.getCash &&
+            giveTiles.every((id) => BOARD_TILES[id]?.ownerId === activePlayer.id && BOARD_TILES[id].houses === 0) &&
+            getTiles.every((id) => BOARD_TILES[id]?.ownerId === targetPlayer.id && BOARD_TILES[id].houses === 0);
+          if (response.accepted && valid) {
+            activePlayer.cash += Number(offer.getCash) - Number(offer.giveCash);
+            targetPlayer.cash += Number(offer.giveCash) - Number(offer.getCash);
+            giveTiles.forEach((id) => { BOARD_TILES[id].ownerId = targetPlayer.id; });
+            getTiles.forEach((id) => { BOARD_TILES[id].ownerId = activePlayer.id; });
+            addLog(`${activePlayer.name} and ${targetPlayer.name} completed an online trade.`, "text-indigo-300");
+            refreshBoardVisuals();
+            updateHUD();
+          } else if (!roomTurnStillOurs) {
+            setOnlineStatus("An online trade response arrived after the offerer's turn ended; it was not applied.", true);
+          } else {
+            addLog(response.accepted ? "An online trade expired because the turn or offer changed." : `${targetPlayer?.name || "The player"} declined the online trade.`, "text-amber-300");
+            updateHUD();
+          }
+        }
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      }
+
+      function safeLogClass(value) {
+        return /^text-(slate|sky|emerald|rose|amber|indigo)-[0-9]{3}$/.test(String(value || "")) ? value : "text-slate-200";
+      }
 
       function addLog(msg, colorClass = "text-slate-200") {
         game.logs.unshift({ msg, colorClass });
         if (game.logs.length > 25) game.logs.pop();
         const logEl = document.getElementById("event-log");
         logEl.innerHTML = game.logs
-          .map((l) => `<div class="${l.colorClass} leading-snug">• ${l.msg}</div>`)
+          .map((l) => `<div class="${safeLogClass(l.colorClass)} leading-snug">• ${escapeHtml(l.msg)}</div>`)
           .join("");
+        scheduleOnlinePublish();
       }
 
       function renderSetupRows() {
@@ -1160,7 +1476,7 @@
             <span class="w-3 h-8 rounded-full inline-block" style="background:${team.color}"></span>
             <div>
               <div class="flex items-center gap-1.5">
-                <span class="font-display text-xs font-bold text-white">${p.name}</span>
+                <span class="font-display text-xs font-bold text-white">${escapeHtml(p.name)}</span>
                 <span class="text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300">${p.isBot ? "BOT" : "P" + (idx + 1)}</span>
               </div>
               <div class="text-[11px] font-display font-bold text-emerald-300 tabular-nums">£${p.cash} <span class="text-[10px] font-normal text-slate-400">• ${team.id}</span></div>
@@ -1180,6 +1496,8 @@
         document.getElementById("turn-player-name").textContent = `${cur.name} (${curTeam.label})`;
         document.getElementById("turn-status-text").textContent = cur.inJail
           ? "In BCP Civic Detention"
+          : game.onlineMode && cur.uid !== monopolyOnline.user?.uid
+          ? `Waiting for ${cur.name} to take their turn`
           : game.isMoving
           ? "Moving around BCP..."
           : game.hasRolled
@@ -1195,13 +1513,20 @@
         const endTurnBtn = document.getElementById("end-turn-btn");
         const buildBtn = document.getElementById("build-btn");
         const tradeBtn = document.getElementById("trade-btn");
+        const skipOfflineBtn = document.getElementById("skip-offline-btn");
 
-        const humanTurn = !cur.isBot && !cur.bankrupt && !game.isMoving && !game.bankruptcyAnimating;
+        const humanTurn = !cur.isBot && !cur.bankrupt && !game.isMoving && !game.bankruptcyAnimating &&
+          (!game.onlineMode || cur.uid === monopolyOnline.user?.uid);
         buildBtn.textContent = cur.cash < 0 ? "Raise Cash" : "Build";
         rollBtn.disabled = !humanTurn || game.hasRolled;
         endTurnBtn.disabled = !humanTurn || !game.hasRolled || game.extraTurn;
         buildBtn.disabled = !humanTurn;
         tradeBtn.disabled = !humanTurn || game.players.filter((x) => !x.bankrupt && x.id !== cur.id).length === 0;
+        const currentRoomSeat = getOnlineSeats(game.onlineRoom).find((player) => player.uid === cur.uid);
+        const canHostSkip = game.onlineMode && monopolyOnline.isHost && currentRoomSeat?.connected === false;
+        skipOfflineBtn.classList.toggle("hidden", !canHostSkip);
+        skipOfflineBtn.disabled = game.isMoving || game.bankruptcyAnimating || game.isTransitioning;
+        scheduleOnlinePublish();
       }
 
       // =========================================================================
@@ -1323,7 +1648,8 @@
 
         const actions = [{ label: "Close", cls: "bg-sky-500 text-slate-950" }];
         const current = getCurrentPlayer();
-        if (current && !current.isBot && tile.ownerId === current.id && tile.mortgage) {
+        const canManageCurrentDeed = current && !current.isBot && (!game.onlineMode || current.uid === monopolyOnline.user?.uid);
+        if (canManageCurrentDeed && tile.ownerId === current.id && tile.mortgage) {
           const groupHasBuildings = tile.group && BOARD_TILES.some((t) => t.group === tile.group && t.houses > 0);
           if (!tile.mortgaged && !groupHasBuildings) {
             actions.unshift({ label: `Mortgage +£${tile.mortgage}`, cls: "bg-amber-400 text-slate-950", onClick: () => {
@@ -1447,6 +1773,21 @@
           };
           if (bidder.isBot) {
             finishBid(bidder.cash >= minimum && (highBid === 0 ? bidder.cash > tile.price * 0.7 : bidder.cash > minimum + 80));
+          } else if (game.onlineMode && bidder.uid !== monopolyOnline.user?.uid) {
+            monopolyOnline.createAuctionPrompt({
+              targetUid: bidder.uid,
+              tileId: tile.id,
+              tileName: tile.name,
+              highBid,
+              minimum
+            }).then((promptId) => {
+              game.onlineAuctionCallbacks.set(promptId, finishBid);
+              setOnlineStatus(`Waiting for ${bidder.name} to bid or pass on ${tile.name}…`);
+              if (game.onlineRoom?.auctionResponses?.[promptId]) handleOnlineAuctionUpdates(game.onlineRoom);
+            }).catch((error) => {
+              setOnlineStatus(error.message || "Auction response failed; treating this as a pass.", true);
+              finishBid(false);
+            });
           } else {
             openModal("Property Auction", tile.name, `Current bid: £${highBid}${highBidder ? ` by ${highBidder.name}` : " • no bids yet"}`,
               `<p>Your cash: £${bidder.cash}. The minimum next bid is £${minimum}.</p>`,
@@ -1719,6 +2060,7 @@
       function rollDiceForCurrentPlayer() {
         const player = getCurrentPlayer();
         if (!player || player.bankrupt || game.hasRolled || game.isMoving) return;
+        if (game.onlineMode && player.uid !== monopolyOnline.user?.uid) return;
         if (player.inJail && player.jailCards > 0 && !player.jailChoiceMade) {
           if (player.isBot) {
             player.jailCards -= 1; player.inJail = false;
@@ -1820,7 +2162,7 @@
 
       function openBuildMenu() {
         const player = getCurrentPlayer();
-        if (!player || player.isBot) return;
+        if (!player || player.isBot || (game.onlineMode && player.uid !== monopolyOnline.user?.uid)) return;
 
         const canDevelop = (tile) => {
           if (tile.type !== "property" || tile.ownerId !== player.id || tile.mortgaged || tile.houses >= 5) return false;
@@ -1893,7 +2235,7 @@
 
       function openTradeMenu() {
         const player = getCurrentPlayer();
-        if (!player || player.isBot) return;
+        if (!player || player.isBot || (game.onlineMode && player.uid !== monopolyOnline.user?.uid)) return;
 
         const others = game.players.filter((p) => !p.bankrupt && p.id !== player.id);
         if (others.length === 0) return;
@@ -1939,6 +2281,27 @@
           }
           const deedNames = (ids) => ids.length ? ids.map((id) => escapeHtml(BOARD_TILES[id].name)).join(", ") : "no properties";
           const summary = `<div class="space-y-3 text-sm"><div class="rounded-xl bg-sky-500/10 border border-sky-400/20 p-3"><strong>${escapeHtml(player.name)} gives</strong><p class="text-slate-300">£${giveCash} and ${deedNames(giveTiles)}</p></div><div class="rounded-xl bg-amber-500/10 border border-amber-400/20 p-3"><strong>${escapeHtml(target.name)} gives</strong><p class="text-slate-300">£${getCash} and ${deedNames(getTiles)}</p></div><p class="text-xs text-slate-400">${escapeHtml(target.name)}, accept or decline this exchange.</p></div>`;
+          if (game.onlineMode && !target.isBot) {
+            openModal("Online Trade", "Send this offer to your opponent?", "They can accept or decline it on their device.", summary, [
+              { label: "Send Offer", cls: "bg-indigo-400 text-slate-950", onClick: async () => {
+                try {
+                  await monopolyOnline.createTradeRequest({
+                    offererName: player.name,
+                    targetUid: target.uid,
+                    giveCash,
+                    getCash,
+                    giveTiles,
+                    getTiles
+                  });
+                  setOnlineStatus(`Trade offer sent to ${target.name}. They must accept it before it takes effect.`);
+                } catch (error) {
+                  setOnlineStatus(error.message || "Could not send the trade offer.", true);
+                }
+              } },
+              { label: "Keep Editing", cls: "bg-white/15 text-white", onClick: renderOffer }
+            ]);
+            return;
+          }
           const valueOf = (tileId, receiver, incoming) => {
             const tile = BOARD_TILES[tileId];
             let value = tile.price * (tile.mortgaged ? 0.35 : 0.65);
@@ -2066,6 +2429,7 @@
 
       function endTurn() {
         const cur = getCurrentPlayer();
+        if (game.onlineMode && cur?.uid !== monopolyOnline.user?.uid) return;
         if (game.extraTurn && cur) {
           game.extraTurn = false;
           game.hasRolled = false;
@@ -2099,6 +2463,8 @@
         const activeTeams = new Set(active.map((p) => p.teamId));
         if (active.length <= 1 || activeTeams.size <= 1) {
           const winner = active[0];
+          game.winnerUid = winner?.uid || null;
+          updateHUD();
           openModal(
             "Match Complete",
             winner ? `${winner.name} (${getTeamById(winner.teamId).label}) Wins!` : "Game Over",
@@ -2125,12 +2491,35 @@
         if (nextPlayer && nextPlayer.isBot) startBotTurn(nextPlayer);
       }
 
-      function startNewMatch() {
+      function skipOfflinePlayerTurn() {
+        const current = getCurrentPlayer();
+        const roomSeat = getOnlineSeats(game.onlineRoom).find((player) => player.uid === current?.uid);
+        if (!game.onlineMode || !monopolyOnline.isHost || roomSeat?.connected !== false || game.isMoving || game.bankruptcyAnimating) return;
+        let nextIndex = (game.turnIndex + 1) % game.players.length;
+        while (game.players[nextIndex].bankrupt && nextIndex !== game.turnIndex) nextIndex = (nextIndex + 1) % game.players.length;
+        if (nextIndex === game.turnIndex) return;
+        game.turnIndex = nextIndex;
+        game.hasRolled = false;
+        game.extraTurn = false;
+        game.consecutiveDoubles = 0;
+        game.lastDice = [0, 0];
+        addLog(`The host skipped ${current.name}'s turn because they disconnected.`, "text-amber-300");
+        updateHUD();
+      }
+
+      function startNewMatch(remoteConfigs = null) {
         AudioEngine.init();
         AudioEngine.startBgm();
         clearPlayersFromScene();
 
+        if (Array.isArray(remoteConfigs)) {
+          game.setupConfigs = remoteConfigs;
+          game.playerCount = remoteConfigs.length;
+        }
+
         game.started = true;
+        game.winnerUid = null;
+        game.onlineWinnerShown = false;
         game.turnIndex = 0;
         game.hasRolled = false;
         game.isMoving = false;
@@ -2148,10 +2537,12 @@
           scene.add(mesh);
 
           game.players.push({
-            id: `p_${i + 1}`,
+            id: cfg.uid || `p_${i + 1}`,
+            uid: cfg.uid || null,
             name: cfg.name,
             isBot: cfg.isBot,
             teamId: cfg.teamId,
+            charId: cfg.charId,
             cash: game.houseRules.startingCash,
             pos: 0,
             inJail: false,
@@ -2184,7 +2575,124 @@
       // =========================================================================
       // 7. CAMERA CONTROLS, BUTTON LISTENERS & MAIN RENDER LOOP
       // =========================================================================
-      document.getElementById("start-match-btn").addEventListener("click", startNewMatch);
+      function setSetupMode(isOnline) {
+        document.getElementById("online-lobby-panel").classList.toggle("hidden", !isOnline);
+        document.getElementById("local-player-setup").classList.toggle("hidden", isOnline);
+        document.getElementById("start-match-btn").classList.toggle("hidden", isOnline);
+        document.querySelector(".setup-columns").style.gridTemplateColumns = isOnline ? "1fr" : "";
+        document.getElementById("online-mode-btn").className = isOnline
+          ? "btn-3d rounded-xl px-4 py-2 text-xs font-bold bg-sky-500 text-slate-950"
+          : "btn-3d rounded-xl px-4 py-2 text-xs font-bold bg-white/10 text-white border border-white/15";
+        document.getElementById("local-mode-btn").className = !isOnline
+          ? "btn-3d rounded-xl px-4 py-2 text-xs font-bold bg-sky-500 text-slate-950"
+          : "btn-3d rounded-xl px-4 py-2 text-xs font-bold bg-white/10 text-white border border-white/15";
+      }
+
+      async function hostOnlineRoom() {
+        const button = document.getElementById("online-host-btn");
+        button.disabled = true;
+        setOnlineStatus("Connecting to Firebase and creating a room…");
+        try {
+          const code = await monopolyOnline.create(document.getElementById("online-player-name").value, getOnlineSettings());
+          document.getElementById("online-room-code").value = code;
+          setOnlineStatus(`Room ${code} created. Share the code and wait for at least one more player.`);
+        } catch (error) {
+          setOnlineStatus(error.message || "Could not create a room. Check Firebase setup and rules.", true);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      async function joinOnlineRoom() {
+        const button = document.getElementById("online-join-btn");
+        button.disabled = true;
+        setOnlineStatus("Looking for the room…");
+        try {
+          const code = await monopolyOnline.join(document.getElementById("online-room-code").value, document.getElementById("online-player-name").value);
+          document.getElementById("online-room-code").value = code;
+          setOnlineStatus(`Joined room ${code}.`);
+        } catch (error) {
+          setOnlineStatus(error.message || "Could not join this room. Check the code and Firebase rules.", true);
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      async function startOnlineMatch() {
+        const room = game.onlineRoom;
+        const seats = getOnlineSeats(room);
+        if (!room || !monopolyOnline.isHost || seats.length < 2) {
+          setOnlineStatus("The host can start once at least two players have joined.", true);
+          return;
+        }
+        backupLocalSetup();
+        game.onlineMode = true;
+        game.onlineStartedFromRoom = true;
+        game.onlineLastRevision = 0;
+        game.onlineWinnerShown = false;
+        game.mapId = room.settings?.mapId || game.mapId;
+        game.houseRules = { ...game.houseRules, ...(room.settings?.houseRules || {}) };
+        game.setupConfigs = seats.map((player, index) => ({
+          uid: player.uid, name: player.name, isBot: false,
+          teamId: ["Alpha", "Beta", "Gamma", "Delta"][index],
+          charId: ["scholar", "sailor", "ranger", "pilot"][index]
+        }));
+        game.playerCount = seats.length;
+        game.applyingOnlineState = true;
+        startNewMatch(game.setupConfigs);
+        game.applyingOnlineState = false;
+        clearTimeout(game.onlineSyncTimer);
+        const initialState = serializeOnlineState();
+        initialState.revision = 1;
+        game.onlineLastRevision = 1;
+        try {
+          await monopolyOnline.start(initialState);
+          setOnlineStatus("Match started. The room host takes the first turn.");
+        } catch (error) {
+          setOnlineStatus(error.message || "Could not start the online match.", true);
+        }
+      }
+
+      document.getElementById("local-mode-btn").addEventListener("click", () => setSetupMode(false));
+      document.getElementById("online-mode-btn").addEventListener("click", () => setSetupMode(true));
+      document.getElementById("online-host-btn").addEventListener("click", hostOnlineRoom);
+      document.getElementById("online-join-btn").addEventListener("click", joinOnlineRoom);
+      document.getElementById("online-start-btn").addEventListener("click", startOnlineMatch);
+      document.getElementById("online-copy-btn").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(monopolyOnline.code || "");
+          setOnlineStatus("Room code copied to clipboard.");
+        } catch {
+          setOnlineStatus("Select and copy the room code shown above.", true);
+        }
+      });
+      document.getElementById("online-leave-btn").addEventListener("click", async () => {
+        const wasWaiting = game.onlineRoom?.status === "waiting";
+        const wasHost = monopolyOnline.isHost;
+        try {
+          await monopolyOnline.leave();
+        } catch (error) {
+          setOnlineStatus(error.message || "Could not leave the waiting room.", true);
+          return;
+        }
+        restoreLocalSetup();
+        game.onlineMode = false;
+        game.onlineStartedFromRoom = false;
+        game.onlineRoom = null;
+        game.onlineLastRevision = 0;
+        game.started = false;
+        document.getElementById("online-room-members").innerHTML = "";
+        document.getElementById("online-room-code-label").classList.add("hidden");
+        document.getElementById("online-copy-btn").classList.add("hidden");
+        document.getElementById("online-leave-btn").classList.add("hidden");
+        document.getElementById("online-start-btn").classList.add("hidden");
+        document.getElementById("online-host-btn").disabled = false;
+        document.getElementById("online-join-btn").disabled = false;
+        document.querySelectorAll(".map-choice, #house-rules-preset, #rule-free-parking, #rule-auctions, #rule-double-go, #rule-start-cash").forEach((input) => { input.disabled = false; });
+        setOnlineStatus(wasWaiting ? wasHost ? "Room closed. Its waiting players have been disconnected." : "You left the waiting room and freed your seat." : "Disconnected from the active match. Your seat is reserved so you can reconnect with the same room code.");
+      });
+
+      document.getElementById("start-match-btn").addEventListener("click", () => startNewMatch());
       document.getElementById("new-game-btn").addEventListener("click", () => {
         game.started = false;
         document.getElementById("game-hud").classList.add("hidden");
@@ -2193,12 +2701,14 @@
         setupModal.classList.remove("hidden", "menu-exit", "menu-entry");
         void setupModal.offsetWidth;
         setupModal.classList.add("menu-entry");
+        setSetupMode(game.onlineMode);
       });
 
       document.getElementById("roll-btn").addEventListener("click", rollDiceForCurrentPlayer);
       document.getElementById("build-btn").addEventListener("click", openBuildMenu);
       document.getElementById("trade-btn").addEventListener("click", openTradeMenu);
       document.getElementById("end-turn-btn").addEventListener("click", endTurn);
+      document.getElementById("skip-offline-btn").addEventListener("click", skipOfflinePlayerTurn);
 
       document.getElementById("cam-follow-btn").addEventListener("click", () => {
         game.cameraMode = "follow";
