@@ -2984,6 +2984,7 @@
                     hostName: name,
                     status: 'waiting',
                     currentTurnUid: user.uid,
+                    moveCount: 0,
                     createdAt: Date.now(),
                     updatedAt: Date.now()
                   };
@@ -3157,7 +3158,7 @@
             const result = await runTransaction(this.onlineRoomRef, (current) => {
               if (!current || current.status !== 'playing' || current.currentTurnUid !== user.uid) return;
               const oldMoves = orderedRoomMoves(current.moves);
-              if (oldMoves.length !== this.engine.history.length || oldMoves.length >= ROWS * COLS) return;
+              if (oldMoves.length !== this.engine.history.length || Number(current.moveCount) !== oldMoves.length || oldMoves.length >= ROWS * COLS) return;
 
               const replay = new Connect4Engine();
               replay.reset(P1);
@@ -3176,6 +3177,7 @@
               const next = {
                 ...current,
                 moves,
+                moveCount: oldMoves.length + 1,
                 status: outcome.gameOver ? 'finished' : 'playing',
                 currentTurnUid: outcome.gameOver ? null : (user.uid === current.hostUid ? current.guestUid : current.hostUid),
                 updatedAt: Date.now()
