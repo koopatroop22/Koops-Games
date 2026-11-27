@@ -597,7 +597,7 @@
 
   <script type="module">
     import { signInAnonymously } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js';
-    import { onValue, ref, runTransaction } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js';
+    import { get, onValue, ref, runTransaction } from 'https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js';
     import { auth, firebaseReady, realtimeDb } from '../../firebase.js';
     import { getActiveProfile } from '../../local-profile-store.js';
     const THREE = window.THREE;
@@ -3020,6 +3020,23 @@
           try {
             const { user, name } = await this.getOnlineIdentity();
             const roomRef = ref(realtimeDb, `connect4Rooms/${code}`);
+            // A joining device may have no local cache for this path. Read the
+            // room first so the transaction updater starts from the server state
+            // instead of aborting immediately on an initial null cache value.
+            const roomSnapshot = await get(roomRef);
+            if (!roomSnapshot.exists()) {
+              this.setOnlineStatus('No room was found with that code. Check the code and try again.', true);
+              return;
+            }
+            const roomBeforeJoin = roomSnapshot.val();
+            if (roomBeforeJoin?.hostUid === user.uid) {
+              this.setOnlineStatus('You are already hosting this room. Join from a different account or device.', true);
+              return;
+            }
+            if (roomBeforeJoin?.status !== 'waiting' || roomBeforeJoin?.guestUid) {
+              this.setOnlineStatus('That room is already full or the game has started.', true);
+              return;
+            }
             const result = await runTransaction(roomRef, (current) => {
               if (!current || current.status !== 'waiting' || current.guestUid || current.hostUid === user.uid) return;
               return {
