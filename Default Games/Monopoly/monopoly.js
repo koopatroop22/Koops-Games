@@ -2597,7 +2597,7 @@
           document.getElementById("online-room-code").value = code;
           setOnlineStatus(`Room ${code} created. Share the code and wait for at least one more player.`);
         } catch (error) {
-          setOnlineStatus(error.message || "Could not create a room. Check Firebase setup and rules.", true);
+          setOnlineStatus(onlineErrorMessage(error), true);
         } finally {
           button.disabled = false;
         }
@@ -2612,10 +2612,18 @@
           document.getElementById("online-room-code").value = code;
           setOnlineStatus(`Joined room ${code}.`);
         } catch (error) {
-          setOnlineStatus(error.message || "Could not join this room. Check the code and Firebase rules.", true);
+          setOnlineStatus(onlineErrorMessage(error), true);
         } finally {
           button.disabled = false;
         }
+      }
+
+      function onlineErrorMessage(error) {
+        const message = String(error?.message || "");
+        if (/permission_denied|permission denied/i.test(message)) {
+          return "Firebase denied the room request. Publish the latest full database.rules.json (including monopolyRooms) and enable Anonymous sign-in.";
+        }
+        return message || "The online room request failed. Check Firebase setup and your connection.";
       }
 
       async function startOnlineMatch() {
