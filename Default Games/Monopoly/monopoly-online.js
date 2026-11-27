@@ -151,7 +151,12 @@ export class MonopolyOnline {
       const activePlayer = Object.values(this.roomData?.players || {}).find((player) => player?.uid === current?.turnUid);
       const maySkipDisconnected = this.isHost && activePlayer?.connected === false;
       if (!current || (current.turnUid !== user.uid && !maySkipDisconnected)) return;
-      return { ...state, revision: (Number(current.revision) || 0) + 1, updatedAt: Date.now() };
+      return {
+        ...state,
+        revision: (Number(current.revision) || 0) + 1,
+        updatedAt: Date.now(),
+        updatedBy: user.uid
+      };
     }, { applyLocally: false });
     return result.committed ? result.snapshot.val() : false;
   }

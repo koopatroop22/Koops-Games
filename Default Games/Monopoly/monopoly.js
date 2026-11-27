@@ -1080,6 +1080,13 @@
 
       function applyOnlineState(state) {
         if (!state || Number(state.revision) <= game.onlineLastRevision) return;
+        // Firebase echoes a player's own committed snapshot through onValue.
+        // Applying it replaces player objects while their movement callbacks
+        // still hold references to the originals, which can snap the token back.
+        if (state.updatedBy && state.updatedBy === monopolyOnline.user?.uid) {
+          game.onlineLastRevision = Number(state.revision) || game.onlineLastRevision;
+          return;
+        }
         game.applyingOnlineState = true;
         game.onlineLastRevision = Number(state.revision) || game.onlineLastRevision;
         game.turnIndex = Number(state.turnIndex) || 0;
