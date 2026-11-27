@@ -325,7 +325,7 @@
           </div>
           <div>
             <h3 class="font-display font-bold text-lg leading-tight">Player Accounts</h3>
-            <p class="font-mono text-[11px] text-stone-500 dark:text-stone-400">KOOPS GAMES PLAYER PROFILE</p>
+            <p class="font-mono text-[11px] text-stone-500 dark:text-stone-400">LOCAL LOUNGE PROFILE</p>
           </div>
         </div>
         <button id="btn-close-account" class="p-2 rounded-xl bg-stone-100 dark:bg-white/10 hover:bg-rose-500/20 text-stone-600 dark:text-stone-300">
@@ -335,12 +335,35 @@
         </button>
       </div>
 
-      <p class="mt-4 text-sm leading-relaxed text-stone-600 dark:text-stone-300">Sign in to manage your profile, find friends and share your game activity.</p>
-      <div class="mt-4 flex items-center justify-between rounded-xl border border-stone-200 bg-stone-100 px-3.5 py-3 dark:border-white/10 dark:bg-white/5">
-        <span class="font-mono text-[10px] uppercase tracking-wider text-stone-500 dark:text-stone-400">Tables inspected</span>
-        <strong id="stat-visited" class="font-display text-lg text-emerald-600 dark:text-emerald-400">0 / 7</strong>
+      <!-- Editable Player Name -->
+      <div class="mt-4">
+        <label for="player-name-input" class="block font-mono text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">Active Seat Name</label>
+        <div class="flex gap-2">
+          <input id="player-name-input" type="text" value="KoopaTroop22" maxlength="20"
+            class="flex-1 px-3.5 py-2 rounded-xl bg-stone-100 dark:bg-stone-950 border border-stone-300 dark:border-white/15 text-sm font-semibold focus:outline-none focus:border-amber-500" />
+          <button id="btn-save-player" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs">
+            Save
+          </button>
+        </div>
       </div>
-      <a href="account.html" class="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-stone-950 hover:bg-amber-400">Open Player Accounts <span class="ml-2">→</span></a>
+
+      <!-- Room Stats Grid -->
+      <div class="grid grid-cols-3 gap-2.5 mt-4">
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div class="font-display font-bold text-xl text-amber-500">7</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Tables Open</div>
+        </div>
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div id="stat-visited" class="font-display font-bold text-xl text-emerald-500">1 / 7</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Inspected</div>
+        </div>
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div class="font-display font-bold text-xl text-sky-400">VIP</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Room Pass</div>
+        </div>
+      </div>
+
+      <p id="account-feedback" class="text-xs text-emerald-500 font-medium mt-3 hidden">Seat name updated for all 7 tables!</p>
     </div>
   </div>
 
@@ -353,17 +376,17 @@
       <div id="launch-badge" class="font-mono text-[10px] uppercase tracking-widest text-amber-500 mb-1">PREPARING TABLE</div>
       <h3 id="launch-title" class="font-display font-bold text-2xl">BCP Monopoly 3D</h3>
       <p id="launch-url-preview" class="font-mono text-xs text-stone-500 dark:text-stone-400 mt-2 bg-stone-100 dark:bg-black/40 py-2 px-3 rounded-xl border border-stone-200 dark:border-white/10 break-all">
-        Select a table from the Koops Games hub
+        https://koopatroop22.github.io/Koops-Games/
       </p>
       <p class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
-        Your table is set and ready. Start the game or return to the 3D parlor.
+        Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.
       </p>
       <div class="mt-5 flex items-center gap-2.5">
         <button id="btn-cancel-launch"
           class="flex-1 py-2.5 px-4 rounded-xl bg-stone-200 dark:bg-white/10 hover:bg-stone-300 dark:hover:bg-white/15 text-xs font-semibold">
           Back to Room
         </button>
-        <a id="btn-confirm-external" href="#"
+        <a id="btn-confirm-external" href="#" target="_blank" rel="noopener noreferrer"
           class="flex-1 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-lg shadow-amber-500/20">
           Open Live Game ↗
         </a>
@@ -381,6 +404,8 @@
        * 1. GAME HUB CATALOG DATA (All 7 Koops Games across 3 Categories)
        * ============================================================================
        */
+      const BASE_HUB_URL = 'https://koopatroop22.github.io/Koops-Games/';
+
       const GAMES = [
         {
           id: 'monopoly',
@@ -393,7 +418,7 @@
           dotClass: 'bg-amber-400',
           position: { x: -10.5, z: -6.5 },
           camOffset: { x: -10.5, y: 7.2, z: 1.5 },
-          url: 'Default%20Games/Monopoly/monopoly.html',
+          url: BASE_HUB_URL + 'monopoly.html',
           description: 'Buy, trade, and develop Bournemouth, Christchurch & Poole landmarks on an interactive 3D board complete with animated dice, houses, and hotels.',
           highlights: ['3D Property Board', '2–4 Pass & Play / AI', 'Custom Houses & Hotels']
         },
@@ -408,7 +433,7 @@
           dotClass: 'bg-sky-400',
           position: { x: -12.0, z: 2.5 },
           camOffset: { x: -12.0, y: 7.5, z: 10.5 },
-          url: 'Default%20Games/tower-defence/index.html',
+          url: BASE_HUB_URL + 'tower-defence.html',
           description: 'Command elemental artillery turrets along winding 3D terrain paths to defend your crystal nexus against escalating waves of armored invaders.',
           highlights: ['3D Terrain Waves', 'Upgradeable Turrets', 'Tactical Sightlines']
         },
@@ -423,7 +448,7 @@
           dotClass: 'bg-blue-400',
           position: { x: -7.5, z: 9.5 },
           camOffset: { x: -7.5, y: 7.0, z: 17.0 },
-          url: 'Default%20Games/Battleships/battleships.html',
+          url: BASE_HUB_URL + 'battleships.html',
           description: 'Deploy your fleet across dual naval radar grids, call coordinates, and hunt down enemy dreadnoughts before your own armada sinks.',
           highlights: ['Dual Tactical Grids', 'Smart Naval AI', 'Hit & Sunk Tracking']
         },
@@ -438,7 +463,7 @@
           dotClass: 'bg-amber-300',
           position: { x: 0.0, z: -8.5 },
           camOffset: { x: 0.0, y: 7.2, z: -0.5 },
-          url: 'Default%20Games/Chess/chess.html',
+          url: BASE_HUB_URL + 'chess.html',
           description: 'Classic tournament chess rendered with sculpted 3D Staunton pieces, legal move highlights, check warnings, and adjustable AI opponents.',
           highlights: ['Sculpted 3D Pieces', 'Solo AI & 2-Player', 'Move History & Orbit']
         },
@@ -453,7 +478,7 @@
           dotClass: 'bg-rose-400',
           position: { x: 0.0, z: 1.5 },
           camOffset: { x: 0.0, y: 6.4, z: 9.5 },
-          url: 'Default%20Games/Connect%204/Connect4.html',
+          url: BASE_HUB_URL + 'connect4.html',
           description: 'Drop crimson and gold discs into the vertical 3D frame, set up diagonal traps, and race to align four in a row.',
           highlights: ['Physics Disc Drops', 'Instant Rematches', 'Solo or Local 2P']
         },
@@ -468,7 +493,7 @@
           dotClass: 'bg-red-400',
           position: { x: 5.5, z: 9.5 },
           camOffset: { x: 5.5, y: 7.2, z: 17.0 },
-          url: 'Default%20Games/Minesweeper/minesweeper.html',
+          url: BASE_HUB_URL + 'minesweeper.html',
           description: 'Sweep beveled 3D hazard tiles, deduce hidden minefields with crisp numeric clues, and plant warning flags with precision.',
           highlights: ['3D Beveled Grid', 'Flag & Chord Controls', 'Multiple Grid Sizes']
         },
@@ -483,7 +508,7 @@
           dotClass: 'bg-emerald-400',
           position: { x: 11.5, z: -2.0 },
           camOffset: { x: 11.5, y: 7.5, z: 7.2 },
-          url: 'Default%20Games/snooker/index.html',
+          url: BASE_HUB_URL + 'snooker.html',
           description: 'Step up to a full-size mahogany snooker table with lush green baize, realistic spin physics, aiming guidelines, and 2-player frame scoring.',
           highlights: ['Full Mahogany Table', 'Cue Spin & Power', '2-Player Frame Rules']
         }
@@ -521,7 +546,7 @@
         activeCategory: 'all',
         selectedGameId: null,
         hoveredGameId: null,
-        inspectedIds: new Set(),
+        inspectedIds: new Set(['monopoly']),
         directoryOpen: true,
         // Camera interpolation state
         isTransitioning: false,
@@ -985,7 +1010,7 @@
 
         navalGroup.add(carrier, destroyer, hitPeg);
         group.add(navalGroup);
-        return { root: group, ringMesh, animParts: { radar, carrier, destroyer, hitPeg } };
+        return { root: group, ringMesh, animParts: { radar } };
       }
 
       /**
@@ -1033,17 +1058,15 @@
           return pGroup;
         }
 
-        const royalPieces = [];
         for (let i = 0; i < 8; i++) {
           addPiece(i, 1, false, false);
           addPiece(i, 6, true, false);
-          const backBlack = addPiece(i, 0, false, i === 3 || i === 4);
-          const backWhite = addPiece(i, 7, true, i === 3 || i === 4);
-          if (i === 3 || i === 4) royalPieces.push(backBlack, backWhite);
+          addPiece(i, 0, false, i === 3 || i === 4);
+          addPiece(i, 7, true, i === 3 || i === 4);
         }
 
         group.add(chessGroup);
-        return { root: group, ringMesh, animParts: { royalPieces } };
+        return { root: group, ringMesh, animParts: {} };
       }
 
       /**
@@ -1075,7 +1098,6 @@
         const redMat = new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.25 });
         const yelMat = new THREE.MeshStandardMaterial({ color: '#facc15', roughness: 0.25 });
 
-        let featuredDisc = null;
         for (let col = 0; col < 7; col++) {
           for (let row = 0; row < 5; row++) {
             const disc = new THREE.Mesh(
@@ -1084,13 +1106,12 @@
             );
             disc.rotation.x = Math.PI / 2;
             disc.position.set((col - 3) * 0.34, 0.34 + row * 0.32, 0);
-            if (col === 3 && row === 4) featuredDisc = disc;
             c4Group.add(disc);
           }
         }
 
         group.add(c4Group);
-        return { root: group, ringMesh, animParts: { featuredDisc } };
+        return { root: group, ringMesh, animParts: {} };
       }
 
       /**
@@ -1104,7 +1125,6 @@
         const tileMatCovered = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.35 });
         const tileMatOpen = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6 });
         const flagMat = new THREE.MeshStandardMaterial({ color: '#ef4444' });
-        let featuredFlag = null;
 
         const gridN = 6;
         const step = 0.52;
@@ -1130,7 +1150,6 @@
               const flag = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 4), flagMat);
               flag.rotation.z = -Math.PI / 2;
               flag.position.set((c - 2.5) * step + 0.08, 0.38, (r - 2.5) * step);
-              if (!featuredFlag) featuredFlag = flag;
               msGroup.add(pole, flag);
             }
           }
@@ -1145,7 +1164,7 @@
         msGroup.add(mineSphere);
 
         group.add(msGroup);
-        return { root: group, ringMesh, animParts: { mineSphere, featuredFlag } };
+        return { root: group, ringMesh, animParts: {} };
       }
 
       /**
@@ -1218,7 +1237,7 @@
 
         snookerGroup.add(cueBall, blueBall, cueStick);
         group.add(snookerGroup);
-        return { root: group, ringMesh, animParts: { cueBall, cueStick } };
+        return { root: group, ringMesh, animParts: {} };
       }
 
       // Instantiate all 7 tables into the 3D scene
@@ -1576,6 +1595,12 @@
       document.getElementById('btn-account-mobile').addEventListener('click', openAccountModal);
       document.getElementById('btn-close-account').addEventListener('click', closeAccountModal);
 
+      document.getElementById('btn-save-player').addEventListener('click', () => {
+        const fb = document.getElementById('account-feedback');
+        fb.classList.remove('hidden');
+        setTimeout(() => fb.classList.add('hidden'), 2600);
+      });
+
       // Launch Game Modal
       const launchModal = document.getElementById('launch-modal');
       document.getElementById('btn-launch-game').addEventListener('click', () => {
@@ -1640,7 +1665,7 @@
           const targetOpacity = isDimmedByFilter
             ? 0.05
             : isSelected
-            ? 0.78 + Math.sin(elapsed * 4.2) * 0.14
+            ? 0.92
             : isHovered
             ? 0.72
             : 0.24 + Math.sin(elapsed * 2 + idx) * 0.06;
@@ -1648,70 +1673,12 @@
 
           // Table-specific ambient life animations
           if (obj.animParts.crystal) {
-            obj.animParts.crystal.rotation.y = elapsed * (isSelected ? 3.2 : 1.4);
-            obj.animParts.crystal.position.y = 0.55 + Math.sin(elapsed * (isSelected ? 6 : 2.5)) * (isSelected ? 0.16 : 0.06);
-            obj.animParts.crystal.material.emissiveIntensity = isSelected ? 0.65 + (Math.sin(elapsed * 7) + 1) * 0.45 : 0.65;
-          }
-          if (obj.animParts.enemy) {
-            const enemy = obj.animParts.enemy;
-            if (isSelected) {
-              const route = (elapsed * 0.55) % 3;
-              if (route < 1) {
-                enemy.position.x = -1.2 + route * 1.85;
-                enemy.position.z = -1.1;
-              } else if (route < 2) {
-                enemy.position.x = 0.65;
-                enemy.position.z = -1.1 + (route - 1) * 2.2;
-              } else {
-                enemy.position.x = 0.65 - (route - 2) * 1.85;
-                enemy.position.z = 1.1;
-              }
-              enemy.position.y = 0.32 + Math.abs(Math.sin(elapsed * 9)) * 0.12;
-              enemy.rotation.y = elapsed * 4;
-            } else {
-              enemy.position.set(-1.2, 0.32, -1.1);
-              enemy.rotation.y = 0;
-            }
+            obj.animParts.crystal.rotation.y = elapsed * 1.4;
+            obj.animParts.crystal.position.y = 0.55 + Math.sin(elapsed * 2.5) * 0.06;
           }
           if (obj.animParts.dice1 && obj.animParts.dice2) {
-            const roll = isSelected ? elapsed * 5.5 : elapsed * 1.2;
-            const bounce = isSelected ? Math.abs(Math.sin(elapsed * 7)) * 0.28 : 0;
-            obj.animParts.dice1.rotation.set(0.3 + Math.sin(roll) * 0.42, 0.5 + roll, 0.2 + Math.cos(roll) * 0.35);
-            obj.animParts.dice2.rotation.set(-0.2 + Math.cos(roll) * 0.36, 0.9 - roll * 0.92, 0.3 + Math.sin(roll) * 0.4);
-            obj.animParts.dice1.position.y = 0.26 + bounce;
-            obj.animParts.dice2.position.y = 0.26 + Math.abs(Math.sin(elapsed * 7 + 0.8)) * (isSelected ? 0.28 : 0);
-          }
-          if (obj.animParts.radar) {
-            obj.animParts.radar.scale.x = 1 + (isSelected ? Math.sin(elapsed * 6) * 0.045 : 0);
-            obj.animParts.carrier.position.y = 0.2 + (isSelected ? Math.sin(elapsed * 4) * 0.06 : 0);
-            obj.animParts.destroyer.position.y = 0.2 + (isSelected ? Math.sin(elapsed * 4 + 1.1) * 0.06 : 0);
-            obj.animParts.destroyer.rotation.y = 0.4 + (isSelected ? Math.sin(elapsed * 2) * 0.12 : 0);
-            obj.animParts.hitPeg.position.y = 0.34 + (isSelected ? (Math.sin(elapsed * 7) + 1) * 0.06 : 0);
-          }
-          if (obj.animParts.royalPieces) {
-            obj.animParts.royalPieces.forEach((piece, pieceIndex) => {
-              piece.position.y = 0.08 + (isSelected ? Math.max(0, Math.sin(elapsed * 4 + pieceIndex * 0.7)) * 0.24 : 0);
-              piece.rotation.y = isSelected ? Math.sin(elapsed * 2.2 + pieceIndex) * 0.18 : 0;
-            });
-          }
-          if (obj.animParts.featuredDisc) {
-            const bounce = isSelected ? Math.max(0, Math.sin(elapsed * 5.5)) * 0.18 : 0;
-            obj.animParts.featuredDisc.position.y = 1.62 + bounce;
-            const pulse = isSelected ? 1 + Math.sin(elapsed * 5.5) * 0.08 : 1;
-            obj.animParts.featuredDisc.scale.setScalar(pulse);
-          }
-          if (obj.animParts.mineSphere) {
-            obj.animParts.mineSphere.rotation.set(elapsed * (isSelected ? 2.6 : 0.25), elapsed * (isSelected ? 3.2 : 0.3), 0);
-            obj.animParts.mineSphere.position.y = 0.34 + (isSelected ? Math.sin(elapsed * 5) * 0.1 : 0);
-            if (obj.animParts.featuredFlag) {
-              obj.animParts.featuredFlag.rotation.z = -Math.PI / 2 + (isSelected ? Math.sin(elapsed * 5) * 0.25 : 0);
-            }
-          }
-          if (obj.animParts.cueBall && obj.animParts.cueStick) {
-            obj.animParts.cueBall.position.z = 1.85 + (isSelected ? Math.sin(elapsed * 2.5) * 0.52 : 0);
-            obj.animParts.cueBall.rotation.x = isSelected ? elapsed * 3.4 : 0;
-            obj.animParts.cueStick.position.z = 2.35 + (isSelected ? Math.sin(elapsed * 2.5 + 0.5) * 0.12 : 0);
-            obj.animParts.cueStick.rotation.z = -0.35 + (isSelected ? Math.sin(elapsed * 2.5 + 0.5) * 0.035 : 0);
+            obj.animParts.dice1.rotation.y = 0.5 + Math.sin(elapsed * 1.2) * 0.2;
+            obj.animParts.dice2.rotation.y = 0.9 - Math.cos(elapsed * 1.2) * 0.2;
           }
         });
 
