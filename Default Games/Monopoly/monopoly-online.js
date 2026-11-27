@@ -57,6 +57,12 @@ export class MonopolyOnline {
         this.attach(code, true);
         return code;
       }
+      // A collision returns an existing room snapshot and is safe to retry.
+      // A denied write has no committed room, so report the rules issue instead
+      // of generating several identical permission_denied warnings.
+      if (!result.snapshot.exists()) {
+        throw new Error('Firebase denied room creation. Publish database.rules.json with the monopolyRooms rules and enable Anonymous sign-in.');
+      }
     }
     throw new Error('Could not reserve a room code. Please try again.');
   }
