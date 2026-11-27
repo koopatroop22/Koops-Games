@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Koops Games — Your 3D Game Room</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Fraunces (Editorial Display), Plus Jakarta Sans (UI), JetBrains Mono (Badges) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Three.js r128 & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
+            sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            lounge: {
+              dark: '#0c0e12',
+              cardDark: 'rgba(18, 22, 30, 0.78)',
+              light: '#f5f1ea',
+              cardLight: 'rgba(255, 252, 247, 0.84)',
+              amber: '#e59a3c',
+              emerald: '#1f8a5b',
+              crimson: '#d94848',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      outline: none;
+    }
+
+    /* Custom subtle scrollbars for directory strip */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Glassmorphism panels */
+    .glass-panel {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+    }
+
+    /* Floating 3D Hover Tooltip */
+    #hover-pill {
+      pointer-events: none;
+      transform: translate(-50%, -125%);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    /* Subtle pulse ring */
+    @keyframes pulseSoft {
+      0%, 100% { opacity: 0.75; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.06); }
+    }
+    .animate-pulse-soft {
+      animation: pulseSoft 2.6s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="font-sans bg-lounge-dark text-stone-100 transition-colors duration-500">
+
+  <!-- Full-Viewport 3D Game Room Canvas -->
+  <div id="canvas-container" aria-label="Interactive 3D Koops Games Parlor"></div>
+
+  <!-- Dynamic Floating 3D Table Tooltip (Tracks hovered 3D table) -->
+  <div id="hover-pill" class="fixed z-20 opacity-0 hidden sm:flex flex-col items-center">
+    <div class="glass-panel px-3.5 py-2 rounded-2xl shadow-2xl border border-amber-400/40 bg-stone-950/90 dark:bg-stone-950/90 text-stone-100 flex items-center gap-2.5">
+      <span id="hover-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse-soft"></span>
+      <div>
+        <div id="hover-title" class="text-xs font-bold tracking-wide text-white">BCP Monopoly 3D</div>
+        <div id="hover-meta" class="font-mono text-[10px] uppercase tracking-wider text-amber-300/90">Click to inspect table</div>
+      </div>
+    </div>
+    <div class="w-2.5 h-2.5 rotate-45 -mt-1.5 bg-stone-950/90 border-r border-b border-amber-400/40"></div>
+  </div>
+
+  <!-- HUD OVERLAY WRAPPER -->
+  <div class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-3 sm:p-5 lg:p-6">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="w-full flex flex-col lg:flex-row lg:items-center justify-between gap-3 pointer-events-auto">
+      <!-- Left: Brand Identity -->
+      <div class="flex items-center justify-between gap-3">
+        <button id="btn-reset-room" title="Return to full game room view"
+          class="glass-panel group flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 shadow-lg hover:border-amber-500/60 text-left">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-600 flex items-center justify-center shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform">
+            <span class="font-display font-bold text-xl text-white tracking-tight">K</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-display font-bold text-base sm:text-lg tracking-tight text-stone-900 dark:text-white leading-none">KOOPS GAMES</span>
+              <span class="font-mono text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">3D HUB</span>
+            </div>
+            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mt-1">GAME ROOM · 7 TABLES READY</p>
+          </div>
+        </button>
+
+        <!-- Mobile Right Controls (Theme + Account) -->
+        <div class="flex lg:hidden items-center gap-2">
+          <button id="btn-account-mobile" aria-label="Player Accounts"
+            class="glass-panel p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-stone-200 hover:border-amber-500/50 shadow-md">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </button>
+          <button id="btn-theme-mobile" aria-label="Toggle Dark or Light Room"
+            class="glass-panel p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-amber-300 hover:border-amber-500/50 shadow-md">
+            <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+            <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Center: Category Filter Pills -->
+      <nav aria-label="Game Categories" class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <button data-category="all"
+          class="cat-pill active-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all bg-amber-500 text-stone-950 border-amber-400 shadow-lg shadow-amber-500/20">
+          All Tables <span class="font-mono text-[11px] opacity-80 ml-1">(7)</span>
+        </button>
+        <button data-category="strategy"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
+          Strategy &amp; Tactics <span class="font-mono text-[11px] opacity-70 ml-1">(3)</span>
+        </button>
+        <button data-category="board"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
+          Board &amp; Puzzle <span class="font-mono text-[11px] opacity-70 ml-1">(3)</span>
+        </button>
+        <button data-category="cue"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
+          Cue Sports <span class="font-mono text-[11px] opacity-70 ml-1">(1)</span>
+        </button>
+      </nav>
+
+      <!-- Right: Desktop Controls -->
+      <div class="hidden lg:flex items-center gap-2.5">
+        <button id="btn-account-desktop"
+          class="glass-panel flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-stone-200 hover:border-amber-500/60 text-xs font-semibold shadow-md">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>Player Accounts</span>
+        </button>
+
+        <button id="btn-theme-desktop"
+          class="glass-panel flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-stone-200 hover:border-amber-500/60 text-xs font-semibold shadow-md">
+          <span id="theme-label-desktop">Sunlit Parlor</span>
+          <svg class="w-4 h-4 text-amber-400 hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+          </svg>
+          <svg class="w-4 h-4 text-indigo-600 block dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- MIDDLE LAYER: HERO EDITORIAL HEADER (LEFT) & SELECTED TABLE DRAWER/CARD (RIGHT) -->
+    <div class="w-full flex-1 flex flex-col md:flex-row items-start md:items-center justify-between my-2 sm:my-4 relative overflow-hidden">
+
+      <!-- Editorial Headline Card (Fades slightly when inspecting a specific table on small screens) -->
+      <section id="hero-banner" class="pointer-events-auto max-w-md glass-panel rounded-3xl p-4 sm:p-6 bg-white/75 dark:bg-stone-900/65 border border-stone-300/70 dark:border-white/10 shadow-2xl transition-all duration-300">
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 mb-2.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span class="font-mono text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">YOUR GAME ROOM</span>
+        </div>
+        <h1 class="font-display font-bold text-2xl sm:text-4xl text-stone-900 dark:text-white tracking-tight leading-[1.1]">
+          Pick a table.<br />
+          <span class="text-amber-600 dark:text-amber-400">Make a day of it.</span>
+        </h1>
+        <p class="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-2.5 leading-relaxed">
+          Orbit the parlor, click any 3D game table to pull up a chair, or jump straight into a match below.
+        </p>
+
+        <!-- Quick Controls Legend -->
+        <div class="mt-4 pt-3 border-t border-stone-300/60 dark:border-white/10 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-mono text-stone-500 dark:text-stone-400">
+          <span class="flex items-center gap-1.5">
+            <kbd class="px-1.5 py-0.5 rounded bg-stone-200/80 dark:bg-white/10 text-stone-700 dark:text-stone-200">Drag</kbd> Orbit Room
+          </span>
+          <span class="flex items-center gap-1.5">
+            <kbd class="px-1.5 py-0.5 rounded bg-stone-200/80 dark:bg-white/10 text-stone-700 dark:text-stone-200">Scroll</kbd> Zoom
+          </span>
+          <span class="flex items-center gap-1.5">
+            <kbd class="px-1.5 py-0.5 rounded bg-stone-200/80 dark:bg-white/10 text-stone-700 dark:text-stone-200">Click</kbd> Select Table
+          </span>
+        </div>
+      </section>
+
+      <!-- SELECTED 3D GAME TABLE DETAIL CARD / DRAWER -->
+      <aside id="game-detail-card"
+        class="pointer-events-auto w-full md:w-[390px] lg:w-[410px] glass-panel rounded-3xl p-5 sm:p-6 bg-white/90 dark:bg-stone-950/85 border border-amber-500/40 shadow-2xl translate-y-6 opacity-0 pointer-events-none hidden flex-col justify-between mt-auto md:mt-0">
+        <div>
+          <!-- Top row: Category Badge + Close -->
+          <div class="flex items-center justify-between gap-2">
+            <span id="detail-badge" class="font-mono text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+              STRATEGY · 2–4 PLAYERS
+            </span>
+            <button id="btn-close-detail" aria-label="Close Table Preview"
+              class="p-1.5 rounded-xl bg-stone-200/70 dark:bg-white/10 hover:bg-rose-500/20 text-stone-600 dark:text-stone-300 hover:text-rose-400 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Game Title & Zone -->
+          <div class="mt-3">
+            <div id="detail-zone" class="text-[11px] font-medium text-stone-500 dark:text-stone-400">Zone 1 · Strategy &amp; Tactics</div>
+            <h2 id="detail-title" class="font-display font-bold text-2xl sm:text-3xl text-stone-900 dark:text-white mt-0.5 tracking-tight">
+              BCP Monopoly 3D
+            </h2>
+          </div>
+
+          <!-- Description -->
+          <p id="detail-desc" class="text-xs sm:text-sm text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+            Roll the dice, acquire iconic Bournemouth, Christchurch &amp; Poole properties, build houses and hotels, and bankrupt your rivals in full 3D.
+          </p>
+
+          <!-- Feature Highlights Pills -->
+          <div id="detail-highlights" class="mt-4 flex flex-wrap gap-1.5">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Action Buttons: Play + Prev/Next Table -->
+        <div class="mt-5 pt-4 border-t border-stone-300/60 dark:border-white/10 flex flex-col gap-2.5">
+          <button id="btn-launch-game"
+            class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 text-stone-950 font-bold text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+            <span id="btn-launch-text">Play BCP Monopoly 3D →</span>
+          </button>
+
+          <div class="flex items-center justify-between gap-2">
+            <button id="btn-prev-table"
+              class="flex-1 py-2 px-3 rounded-xl bg-stone-200/75 dark:bg-white/5 hover:bg-stone-300/75 dark:hover:bg-white/10 border border-stone-300/70 dark:border-white/10 text-xs font-semibold text-stone-700 dark:text-stone-200 flex items-center justify-center gap-1.5 transition-colors">
+              <span>← Prev Table</span>
+            </button>
+            <button id="btn-overview-cam"
+              class="py-2 px-3 rounded-xl bg-stone-200/75 dark:bg-white/5 hover:bg-stone-300/75 dark:hover:bg-white/10 border border-stone-300/70 dark:border-white/10 text-xs font-mono text-stone-600 dark:text-stone-300" title="Room Overview">
+              Room View
+            </button>
+            <button id="btn-next-table"
+              class="flex-1 py-2 px-3 rounded-xl bg-stone-200/75 dark:bg-white/5 hover:bg-stone-300/75 dark:hover:bg-white/10 border border-stone-300/70 dark:border-white/10 text-xs font-semibold text-stone-700 dark:text-stone-200 flex items-center justify-center gap-1.5 transition-colors">
+              <span>Next Table →</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- BOTTOM COLLAPSIBLE TABLE DIRECTORY STRIP -->
+    <footer class="w-full pointer-events-auto flex flex-col items-center">
+      <!-- Toggle Pill -->
+      <button id="btn-toggle-directory"
+        class="glass-panel mb-2 px-3.5 py-1 rounded-full bg-white/80 dark:bg-stone-900/80 border border-stone-300/70 dark:border-white/10 text-[11px] font-mono uppercase tracking-wider text-stone-700 dark:text-stone-300 hover:border-amber-500/50 flex items-center gap-2 shadow-md">
+        <span>Table Directory</span>
+        <svg id="directory-chevron" class="w-3.5 h-3.5 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      <!-- Scrollable Strip of 7 Game Tables -->
+      <div id="directory-strip"
+        class="w-full max-w-6xl transition-all duration-300 overflow-hidden max-h-40 opacity-100">
+        <div id="directory-cards" class="flex items-stretch gap-2.5 overflow-x-auto no-scrollbar pb-1 px-0.5">
+          <!-- Dynamically injected table cards -->
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- PLAYER ACCOUNTS MODAL -->
+  <div id="account-modal" class="fixed inset-0 z-40 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="glass-panel w-full max-w-md rounded-3xl p-6 bg-white dark:bg-stone-900 border border-stone-300 dark:border-white/15 shadow-2xl text-stone-900 dark:text-white">
+      <div class="flex items-center justify-between pb-4 border-b border-stone-200 dark:border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-display font-bold text-white text-lg shadow">
+            K1
+          </div>
+          <div>
+            <h3 class="font-display font-bold text-lg leading-tight">Player Accounts</h3>
+            <p class="font-mono text-[11px] text-stone-500 dark:text-stone-400">LOCAL LOUNGE PROFILE</p>
+          </div>
+        </div>
+        <button id="btn-close-account" class="p-2 rounded-xl bg-stone-100 dark:bg-white/10 hover:bg-rose-500/20 text-stone-600 dark:text-stone-300">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Editable Player Name -->
+      <div class="mt-4">
+        <label for="player-name-input" class="block font-mono text-[11px] uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-1.5">Active Seat Name</label>
+        <div class="flex gap-2">
+          <input id="player-name-input" type="text" value="KoopaTroop22" maxlength="20"
+            class="flex-1 px-3.5 py-2 rounded-xl bg-stone-100 dark:bg-stone-950 border border-stone-300 dark:border-white/15 text-sm font-semibold focus:outline-none focus:border-amber-500" />
+          <button id="btn-save-player" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs">
+            Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Room Stats Grid -->
+      <div class="grid grid-cols-3 gap-2.5 mt-4">
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div class="font-display font-bold text-xl text-amber-500">7</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Tables Open</div>
+        </div>
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div id="stat-visited" class="font-display font-bold text-xl text-emerald-500">1 / 7</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Inspected</div>
+        </div>
+        <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
+          <div class="font-display font-bold text-xl text-sky-400">VIP</div>
+          <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Room Pass</div>
+        </div>
+      </div>
+
+      <p id="account-feedback" class="text-xs text-emerald-500 font-medium mt-3 hidden">Seat name updated for all 7 tables!</p>
+    </div>
+  </div>
+
+  <!-- GAME LAUNCH PREVIEW MODAL (Smooth in-app launch confirmation / link bridge) -->
+  <div id="launch-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-md rounded-3xl p-6 bg-white dark:bg-stone-900 border border-amber-500/40 shadow-2xl text-stone-900 dark:text-white text-center">
+      <div class="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center mx-auto mb-4">
+        <span class="font-display font-bold text-2xl text-amber-500">▶</span>
+      </div>
+      <div id="launch-badge" class="font-mono text-[10px] uppercase tracking-widest text-amber-500 mb-1">PREPARING TABLE</div>
+      <h3 id="launch-title" class="font-display font-bold text-2xl">BCP Monopoly 3D</h3>
+      <p id="launch-url-preview" class="font-mono text-xs text-stone-500 dark:text-stone-400 mt-2 bg-stone-100 dark:bg-black/40 py-2 px-3 rounded-xl border border-stone-200 dark:border-white/10 break-all">
+        https://koopatroop22.github.io/Koops-Games/
+      </p>
+      <p class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+        Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.
+      </p>
+      <div class="mt-5 flex items-center gap-2.5">
+        <button id="btn-cancel-launch"
+          class="flex-1 py-2.5 px-4 rounded-xl bg-stone-200 dark:bg-white/10 hover:bg-stone-300 dark:hover:bg-white/15 text-xs font-semibold">
+          Back to Room
+        </button>
+        <a id="btn-confirm-external" href="#" target="_blank" rel="noopener noreferrer"
+          class="flex-1 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-lg shadow-amber-500/20">
+          Open Live Game ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN THREE.JS & INTERACTIVE APPLICATION SCRIPT -->
+  <script>
+    (function () {
+      'use strict';
+
+      /**
+       * ============================================================================
+       * 1. GAME HUB CATALOG DATA (All 7 Koops Games across 3 Categories)
+       * ============================================================================
+       */
+      const BASE_HUB_URL = 'https://koopatroop22.github.io/Koops-Games/';
+
+      const GAMES = [
+        {
+          id: 'monopoly',
+          title: 'BCP Monopoly 3D',
+          category: 'strategy',
+          categoryLabel: 'Strategy & Tactics',
+          tag: 'STRATEGY · 2–4 PLAYERS',
+          accentHex: '#e59a3c',
+          accentClass: 'text-amber-400',
+          dotClass: 'bg-amber-400',
+          position: { x: -10.5, z: -6.5 },
+          camOffset: { x: -10.5, y: 7.2, z: 1.5 },
+          url: BASE_HUB_URL + 'monopoly.html',
+          description: 'Buy, trade, and develop Bournemouth, Christchurch & Poole landmarks on an interactive 3D board complete with animated dice, houses, and hotels.',
+          highlights: ['3D Property Board', '2–4 Pass & Play / AI', 'Custom Houses & Hotels']
+        },
+        {
+          id: 'tower-defence',
+          title: 'Tower Defence 3D',
+          category: 'strategy',
+          categoryLabel: 'Strategy & Tactics',
+          tag: 'STRATEGY · SOLO',
+          accentHex: '#38bdf8',
+          accentClass: 'text-sky-400',
+          dotClass: 'bg-sky-400',
+          position: { x: -12.0, z: 2.5 },
+          camOffset: { x: -12.0, y: 7.5, z: 10.5 },
+          url: BASE_HUB_URL + 'tower-defence.html',
+          description: 'Command elemental artillery turrets along winding 3D terrain paths to defend your crystal nexus against escalating waves of armored invaders.',
+          highlights: ['3D Terrain Waves', 'Upgradeable Turrets', 'Tactical Sightlines']
+        },
+        {
+          id: 'battleships',
+          title: 'Battleships',
+          category: 'strategy',
+          categoryLabel: 'Strategy & Tactics',
+          tag: 'STRATEGY · NAVAL BATTLE',
+          accentHex: '#60a5fa',
+          accentClass: 'text-blue-400',
+          dotClass: 'bg-blue-400',
+          position: { x: -7.5, z: 9.5 },
+          camOffset: { x: -7.5, y: 7.0, z: 17.0 },
+          url: BASE_HUB_URL + 'battleships.html',
+          description: 'Deploy your fleet across dual naval radar grids, call coordinates, and hunt down enemy dreadnoughts before your own armada sinks.',
+          highlights: ['Dual Tactical Grids', 'Smart Naval AI', 'Hit & Sunk Tracking']
+        },
+        {
+          id: 'chess',
+          title: '3D Chess',
+          category: 'board',
+          categoryLabel: 'Board & Puzzle',
+          tag: 'BOARD GAME · SOLO OR 2 PLAYER',
+          accentHex: '#f59e0b',
+          accentClass: 'text-amber-300',
+          dotClass: 'bg-amber-300',
+          position: { x: 0.0, z: -8.5 },
+          camOffset: { x: 0.0, y: 7.2, z: -0.5 },
+          url: BASE_HUB_URL + 'chess.html',
+          description: 'Classic tournament chess rendered with sculpted 3D Staunton pieces, legal move highlights, check warnings, and adjustable AI opponents.',
+          highlights: ['Sculpted 3D Pieces', 'Solo AI & 2-Player', 'Move History & Orbit']
+        },
+        {
+          id: 'connect4',
+          title: 'Connect 4',
+          category: 'board',
+          categoryLabel: 'Board & Puzzle',
+          tag: 'QUICK PLAY · SOLO OR 2 PLAYERS',
+          accentHex: '#f43f5e',
+          accentClass: 'text-rose-400',
+          dotClass: 'bg-rose-400',
+          position: { x: 0.0, z: 1.5 },
+          camOffset: { x: 0.0, y: 6.4, z: 9.5 },
+          url: BASE_HUB_URL + 'connect4.html',
+          description: 'Drop crimson and gold discs into the vertical 3D frame, set up diagonal traps, and race to align four in a row.',
+          highlights: ['Physics Disc Drops', 'Instant Rematches', 'Solo or Local 2P']
+        },
+        {
+          id: 'minesweeper',
+          title: 'Minesweeper',
+          category: 'board',
+          categoryLabel: 'Board & Puzzle',
+          tag: 'PUZZLE · SOLO',
+          accentHex: '#ef4444',
+          accentClass: 'text-red-400',
+          dotClass: 'bg-red-400',
+          position: { x: 5.5, z: 9.5 },
+          camOffset: { x: 5.5, y: 7.2, z: 17.0 },
+          url: BASE_HUB_URL + 'minesweeper.html',
+          description: 'Sweep beveled 3D hazard tiles, deduce hidden minefields with crisp numeric clues, and plant warning flags with precision.',
+          highlights: ['3D Beveled Grid', 'Flag & Chord Controls', 'Multiple Grid Sizes']
+        },
+        {
+          id: 'snooker',
+          title: '3D Snooker',
+          category: 'cue',
+          categoryLabel: 'Cue Sports',
+          tag: 'CUE SPORTS · 2 PLAYERS',
+          accentHex: '#10b981',
+          accentClass: 'text-emerald-400',
+          dotClass: 'bg-emerald-400',
+          position: { x: 11.5, z: -2.0 },
+          camOffset: { x: 11.5, y: 7.5, z: 7.2 },
+          url: BASE_HUB_URL + 'snooker.html',
+          description: 'Step up to a full-size mahogany snooker table with lush green baize, realistic spin physics, aiming guidelines, and 2-player frame scoring.',
+          highlights: ['Full Mahogany Table', 'Cue Spin & Power', '2-Player Frame Rules']
+        }
+      ];
+
+      /**
+       * Category Camera Focus Presets
+       */
+      const CATEGORY_VIEWS = {
+        all: {
+          pos: new THREE.Vector3(0, 19.5, 24.5),
+          target: new THREE.Vector3(0, 0.5, 0.5)
+        },
+        strategy: {
+          pos: new THREE.Vector3(-12.5, 13.5, 14.5),
+          target: new THREE.Vector3(-10.0, 0.8, 1.5)
+        },
+        board: {
+          pos: new THREE.Vector3(2.0, 13.5, 14.5),
+          target: new THREE.Vector3(1.5, 0.8, 0.5)
+        },
+        cue: {
+          pos: new THREE.Vector3(11.5, 10.5, 10.5),
+          target: new THREE.Vector3(11.5, 1.0, -2.0)
+        }
+      };
+
+      /**
+       * ============================================================================
+       * 2. APPLICATION STATE
+       * ============================================================================
+       */
+      const state = {
+        isDark: true,
+        activeCategory: 'all',
+        selectedGameId: null,
+        hoveredGameId: null,
+        inspectedIds: new Set(['monopoly']),
+        directoryOpen: true,
+        // Camera interpolation state
+        isTransitioning: false,
+        desiredCamPos: CATEGORY_VIEWS.all.pos.clone(),
+        desiredTarget: CATEGORY_VIEWS.all.target.clone()
+      };
+
+      /**
+       * ============================================================================
+       * 3. THREE.JS SCENE, RENDERER, LIGHTS & ENVIRONMENT SETUP
+       * ============================================================================
+       */
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#0c0e12');
+      scene.fog = new THREE.FogExp2('#0c0e12', 0.014);
+
+      const camera = new THREE.PerspectiveCamera(
+        44,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        160
+      );
+      camera.position.copy(CATEGORY_VIEWS.all.pos);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      container.appendChild(renderer.domElement);
+
+      // OrbitControls
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.065;
+      controls.maxPolarAngle = Math.PI * 0.45;
+      controls.minPolarAngle = 0.22;
+      controls.minDistance = 5.5;
+      controls.maxDistance = 42;
+      controls.target.copy(CATEGORY_VIEWS.all.target);
+
+      // Stop automated flight if user manually drags/zooms
+      controls.addEventListener('start', () => {
+        state.isTransitioning = false;
+      });
+
+      /**
+       * Lighting Setup (Switchable between Evening Lounge & Sunlit Parlor)
+       */
+      const hemiLight = new THREE.HemisphereLight('#ffe8c8', '#1c2230', 0.65);
+      scene.add(hemiLight);
+
+      const mainDirLight = new THREE.DirectionalLight('#ffdfa8', 1.15);
+      mainDirLight.position.set(14, 26, 16);
+      mainDirLight.castShadow = true;
+      mainDirLight.shadow.mapSize.width = 2048;
+      mainDirLight.shadow.mapSize.height = 2048;
+      mainDirLight.shadow.camera.near = 2;
+      mainDirLight.shadow.camera.far = 70;
+      const d = 22;
+      mainDirLight.shadow.camera.left = -d;
+      mainDirLight.shadow.camera.right = d;
+      mainDirLight.shadow.camera.top = d;
+      mainDirLight.shadow.camera.bottom = -d;
+      mainDirLight.shadow.bias = -0.0005;
+      scene.add(mainDirLight);
+
+      // Warm zone overhead spotlights
+      const zoneSpot1 = new THREE.PointLight('#f59e0b', 1.1, 24);
+      zoneSpot1.position.set(-10, 9, 1);
+      scene.add(zoneSpot1);
+
+      const zoneSpot2 = new THREE.PointLight('#fbbf24', 1.0, 24);
+      zoneSpot2.position.set(1, 9, 0);
+      scene.add(zoneSpot2);
+
+      const zoneSpot3 = new THREE.PointLight('#34d399', 1.1, 22);
+      zoneSpot3.position.set(11.5, 9, -2);
+      scene.add(zoneSpot3);
+
+      /**
+       * ============================================================================
+       * 4. PROCEDURAL TEXTURES & GAME ROOM ARCHITECTURE
+       * ============================================================================
+       */
+      function createParquetTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#241911';
+        ctx.fillRect(0, 0, 512, 512);
+
+        const plankW = 64;
+        const plankH = 256;
+        const shades = ['#2a1d14', '#312217', '#261a11', '#362519', '#2c1e15'];
+
+        for (let x = 0; x < 512; x += plankW) {
+          const offset = (x / plankW) % 2 === 0 ? 0 : 128;
+          for (let y = -128; y < 512; y += plankH) {
+            ctx.fillStyle = shades[(x + y + 512) % shades.length];
+            ctx.fillRect(x + 1, y + offset + 1, plankW - 2, plankH - 2);
+
+            // Subtle wood grain lines
+            ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + plankW * 0.35, y + offset);
+            ctx.lineTo(x + plankW * 0.35, y + offset + plankH);
+            ctx.stroke();
+          }
+        }
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(10, 10);
+        return tex;
+      }
+
+      // Main Parlor Floor
+      const floorGeo = new THREE.CylinderGeometry(28, 28, 0.6, 64);
+      const floorMat = new THREE.MeshStandardMaterial({
+        map: createParquetTexture(),
+        roughness: 0.62,
+        metalness: 0.08
+      });
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.position.y = -0.3;
+      floorMesh.receiveShadow = true;
+      scene.add(floorMesh);
+
+      // Brass Decorative Outer Rim around the Game Room Floor
+      const brassRim = new THREE.Mesh(
+        new THREE.TorusGeometry(28, 0.25, 16, 96),
+        new THREE.MeshStandardMaterial({ color: '#c8963e', roughness: 0.3, metalness: 0.8 })
+      );
+      brassRim.rotation.x = Math.PI / 2;
+      brassRim.position.y = 0.02;
+      scene.add(brassRim);
+
+      // Zone Rugs / Lounge Carpets under each of the 3 Zones
+      function createZoneCarpet(x, z, radiusX, radiusZ, colorHex) {
+        const group = new THREE.Group();
+        const rugGeo = new THREE.CylinderGeometry(1, 1, 0.05, 48);
+        const rugMat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.88,
+          metalness: 0.02
+        });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.scale.set(radiusX, 1, radiusZ);
+        rug.position.y = 0.025;
+        rug.receiveShadow = true;
+        group.add(rug);
+
+        const border = new THREE.Mesh(
+          new THREE.RingGeometry(0.96, 1.0, 48),
+          new THREE.MeshBasicMaterial({ color: '#e59a3c', side: THREE.DoubleSide, transparent: true, opacity: 0.45 })
+        );
+        border.rotation.x = -Math.PI / 2;
+        border.scale.set(radiusX, radiusZ, 1);
+        border.position.y = 0.055;
+        group.add(border);
+
+        group.position.set(x, 0, z);
+        scene.add(group);
+        return group;
+      }
+
+      createZoneCarpet(-10.2, 1.8, 7.2, 11.5, '#1e293b'); // Strategy Zone Carpet
+      createZoneCarpet(1.8, 0.8, 6.8, 12.2, '#291d1e');   // Board & Puzzle Carpet
+      createZoneCarpet(11.5, -2.0, 5.2, 7.4, '#132a22');  // Cue Sports Carpet
+
+      // Ambient Floating Dust Motes / Lounge Sparkles
+      const particleCount = 130;
+      const particleGeo = new THREE.BufferGeometry();
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount; i++) {
+        particlePositions[i * 3] = (Math.random() - 0.5) * 44;
+        particlePositions[i * 3 + 1] = 0.8 + Math.random() * 11;
+        particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 36;
+      }
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+      const particleMat = new THREE.PointsMaterial({
+        color: '#fcd34d',
+        size: 0.14,
+        transparent: true,
+        opacity: 0.45
+      });
+      const ambientParticles = new THREE.Points(particleGeo, particleMat);
+      scene.add(ambientParticles);
+
+      /**
+       * ============================================================================
+       * 5. PROCEDURAL 3D GAME TABLES BUILDER (All 7 Distinct Game Tables)
+       * ============================================================================
+       */
+      const tableObjects = {}; // Maps game.id -> { root, interactiveGroup, ringMesh, baseY, animParts }
+      const raycastTargets = [];
+
+      // Shared materials
+      const darkWoodMat = new THREE.MeshStandardMaterial({ color: '#3b2416', roughness: 0.45, metalness: 0.1 });
+      const brassMat = new THREE.MeshStandardMaterial({ color: '#d4a24c', roughness: 0.28, metalness: 0.82 });
+
+      // Helper: Builds a handsome pedestal table base + interactive selection glow ring
+      function createTablePedestal(width, depth, height, accentHex) {
+        const group = new THREE.Group();
+
+        // Pedestal foot
+        const foot = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.1, 1.45, 0.25, 24),
+          darkWoodMat
+        );
+        foot.position.y = 0.125;
+        foot.castShadow = true;
+        foot.receiveShadow = true;
+        group.add(foot);
+
+        // Central pillar
+        const pillar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.38, 0.48, height - 0.35, 20),
+          darkWoodMat
+        );
+        pillar.position.y = height * 0.5;
+        pillar.castShadow = true;
+        group.add(pillar);
+
+        // Brass collar
+        const collar = new THREE.Mesh(
+          new THREE.TorusGeometry(0.45, 0.06, 12, 24),
+          brassMat
+        );
+        collar.rotation.x = Math.PI / 2;
+        collar.position.y = height * 0.52;
+        group.add(collar);
+
+        // Tabletop wooden frame
+        const topMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(width, 0.26, depth),
+          darkWoodMat
+        );
+        topMesh.position.y = height;
+        topMesh.castShadow = true;
+        topMesh.receiveShadow = true;
+        group.add(topMesh);
+
+        // Floor selection / hover glow ring
+        const ringRadius = Math.max(width, depth) * 0.68;
+        const ringGeo = new THREE.RingGeometry(ringRadius - 0.14, ringRadius, 48);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: accentHex,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.28
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = -Math.PI / 2;
+        ringMesh.position.y = 0.07;
+        group.add(ringMesh);
+
+        return { group, ringMesh, topY: height + 0.13 };
+      }
+
+      /**
+       * TABLE 1: BCP Monopoly 3D
+       */
+      function buildMonopolyTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.4, 4.4, 1.65, game.accentHex);
+        const boardGroup = new THREE.Group();
+        boardGroup.position.y = topY;
+
+        // Classic mint-cream Monopoly board base
+        const board = new THREE.Mesh(
+          new THREE.BoxGeometry(3.8, 0.1, 3.8),
+          new THREE.MeshStandardMaterial({ color: '#d8e8dc', roughness: 0.5 })
+        );
+        board.position.y = 0.05;
+        board.receiveShadow = true;
+        boardGroup.add(board);
+
+        // Colorful property strips along all 4 sides
+        const propColors = ['#8b5cf6', '#38bdf8', '#ec4899', '#f97316', '#ef4444', '#eab308', '#22c55e', '#2563eb'];
+        for (let side = 0; side < 4; side++) {
+          const sideGroup = new THREE.Group();
+          sideGroup.rotation.y = (side * Math.PI) / 2;
+          for (let i = -3; i <= 3; i++) {
+            const strip = new THREE.Mesh(
+              new THREE.BoxGeometry(0.36, 0.03, 0.22),
+              new THREE.MeshStandardMaterial({ color: propColors[(i + 3 + side * 2) % propColors.length] })
+            );
+            strip.position.set(i * 0.42, 0.11, 1.48);
+            sideGroup.add(strip);
+
+            // Miniature green houses & red hotels on select properties
+            if ((i + side) % 2 === 0) {
+              const isHotel = i === 2;
+              const bldg = new THREE.Mesh(
+                new THREE.BoxGeometry(isHotel ? 0.22 : 0.14, isHotel ? 0.18 : 0.12, 0.14),
+                new THREE.MeshStandardMaterial({ color: isHotel ? '#dc2626' : '#16a34a' })
+              );
+              bldg.position.set(i * 0.42, 0.18, 1.48);
+              bldg.castShadow = true;
+              sideGroup.add(bldg);
+            }
+          }
+          boardGroup.add(sideGroup);
+        }
+
+        // Center Dice Pair (animated gently)
+        const dice1 = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.28, 0.28),
+          new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.2 })
+        );
+        dice1.position.set(-0.22, 0.26, 0.15);
+        dice1.rotation.set(0.3, 0.5, 0.2);
+        dice1.castShadow = true;
+
+        const dice2 = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.28, 0.28),
+          new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.2 })
+        );
+        dice2.position.set(0.24, 0.26, -0.18);
+        dice2.rotation.set(-0.2, 0.9, 0.3);
+        dice2.castShadow = true;
+
+        boardGroup.add(dice1, dice2);
+        group.add(boardGroup);
+
+        return { root: group, ringMesh, animParts: { dice1, dice2 } };
+      }
+
+      /**
+       * TABLE 2: Tower Defence 3D
+       */
+      function buildTowerDefenceTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.4, 4.4, 1.65, game.accentHex);
+        const mapGroup = new THREE.Group();
+        mapGroup.position.y = topY;
+
+        // Lush grassy terrain slab
+        const terrain = new THREE.Mesh(
+          new THREE.BoxGeometry(3.8, 0.16, 3.8),
+          new THREE.MeshStandardMaterial({ color: '#2e6f40', roughness: 0.8 })
+        );
+        terrain.position.y = 0.08;
+        terrain.receiveShadow = true;
+        mapGroup.add(terrain);
+
+        // Winding stone path segments
+        const pathMat = new THREE.MeshStandardMaterial({ color: '#9ca3af', roughness: 0.75 });
+        const seg1 = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.04, 0.55), pathMat);
+        seg1.position.set(-0.4, 0.17, -1.1);
+        const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.04, 2.2), pathMat);
+        seg2.position.set(0.65, 0.17, 0.0);
+        const seg3 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.04, 0.55), pathMat);
+        seg3.position.set(-0.3, 0.17, 1.1);
+        mapGroup.add(seg1, seg2, seg3);
+
+        // Defense Turret Towers
+        const towerCoords = [[-0.5, -0.35], [1.35, -0.5], [-0.4, 0.4]];
+        towerCoords.forEach(([tx, tz], idx) => {
+          const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.24, 0.3, 0.55, 12),
+            new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.4 })
+          );
+          base.position.set(tx, 0.42, tz);
+          base.castShadow = true;
+
+          const top = new THREE.Mesh(
+            new THREE.ConeGeometry(0.26, 0.32, 12),
+            new THREE.MeshStandardMaterial({ color: idx === 1 ? '#38bdf8' : '#f59e0b' })
+          );
+          top.position.set(tx, 0.84, tz);
+          mapGroup.add(base, top);
+        });
+
+        // Glowing Cyan Crystal Core at end of path
+        const crystal = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.32, 0),
+          new THREE.MeshStandardMaterial({
+            color: '#38bdf8',
+            emissive: '#0284c7',
+            emissiveIntensity: 0.65,
+            roughness: 0.15
+          })
+        );
+        crystal.position.set(-1.35, 0.55, 1.1);
+        mapGroup.add(crystal);
+
+        // Invading red cube
+        const enemy = new THREE.Mesh(
+          new THREE.BoxGeometry(0.26, 0.26, 0.26),
+          new THREE.MeshStandardMaterial({ color: '#ef4444' })
+        );
+        enemy.position.set(-1.2, 0.32, -1.1);
+        mapGroup.add(enemy);
+
+        group.add(mapGroup);
+        return { root: group, ringMesh, animParts: { crystal, enemy } };
+      }
+
+      /**
+       * TABLE 3: Battleships
+       */
+      function buildBattleshipsTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.5, 3.8, 1.65, game.accentHex);
+        const navalGroup = new THREE.Group();
+        navalGroup.position.y = topY;
+
+        // Ocean grid board
+        const sea = new THREE.Mesh(
+          new THREE.BoxGeometry(3.9, 0.12, 3.1),
+          new THREE.MeshStandardMaterial({ color: '#0c4a6e', roughness: 0.3, metalness: 0.15 })
+        );
+        sea.position.y = 0.06;
+        sea.receiveShadow = true;
+        navalGroup.add(sea);
+
+        // Upright Radar Divider Wall
+        const divider = new THREE.Mesh(
+          new THREE.BoxGeometry(3.7, 1.15, 0.1),
+          new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.4 })
+        );
+        divider.position.set(0, 0.68, -0.1);
+        divider.castShadow = true;
+        navalGroup.add(divider);
+
+        // Radar screen glow panel
+        const radar = new THREE.Mesh(
+          new THREE.PlaneGeometry(3.3, 0.85),
+          new THREE.MeshBasicMaterial({ color: '#0284c7' })
+        );
+        radar.position.set(0, 0.72, -0.04);
+        navalGroup.add(radar);
+
+        // Miniature Grey Battleships on front ocean
+        const shipMat = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4, metalness: 0.4 });
+        const carrier = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.16, 0.32), shipMat);
+        carrier.position.set(-0.85, 0.2, 0.75);
+        carrier.castShadow = true;
+
+        const destroyer = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.15, 0.24), shipMat);
+        destroyer.position.set(0.95, 0.2, 0.95);
+        destroyer.rotation.y = 0.4;
+        destroyer.castShadow = true;
+
+        // Hit & Miss Pegs
+        const hitPeg = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.06, 0.06, 0.24, 10),
+          new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#b91c1c', emissiveIntensity: 0.4 })
+        );
+        hitPeg.position.set(-0.7, 0.34, 0.75);
+
+        navalGroup.add(carrier, destroyer, hitPeg);
+        group.add(navalGroup);
+        return { root: group, ringMesh, animParts: { radar } };
+      }
+
+      /**
+       * TABLE 4: 3D Chess
+       */
+      function buildChessTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.2, 4.2, 1.65, game.accentHex);
+        const chessGroup = new THREE.Group();
+        chessGroup.position.y = topY;
+
+        // 8x8 Checkered Board
+        const sqSize = 0.42;
+        const lightSq = new THREE.MeshStandardMaterial({ color: '#f3e5ab', roughness: 0.35 });
+        const darkSq = new THREE.MeshStandardMaterial({ color: '#5c3a21', roughness: 0.4 });
+
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            const sq = new THREE.Mesh(
+              new THREE.BoxGeometry(sqSize, 0.08, sqSize),
+              (r + c) % 2 === 0 ? lightSq : darkSq
+            );
+            sq.position.set((c - 3.5) * sqSize, 0.04, (r - 3.5) * sqSize);
+            sq.receiveShadow = true;
+            chessGroup.add(sq);
+          }
+        }
+
+        // Helper to spawn sculpted chess pieces
+        const whitePieceMat = new THREE.MeshStandardMaterial({ color: '#fafaf9', roughness: 0.25 });
+        const blackPieceMat = new THREE.MeshStandardMaterial({ color: '#1c1917', roughness: 0.3 });
+
+        function addPiece(xIdx, zIdx, isWhite, isRoyal) {
+          const pGroup = new THREE.Group();
+          const mat = isWhite ? whitePieceMat : blackPieceMat;
+          const h = isRoyal ? 0.62 : 0.36;
+          const body = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.15, h, 14), mat);
+          body.position.y = h * 0.5;
+          body.castShadow = true;
+          const head = new THREE.Mesh(new THREE.SphereGeometry(isRoyal ? 0.11 : 0.09, 14, 14), mat);
+          head.position.y = h + 0.06;
+          head.castShadow = true;
+          pGroup.add(body, head);
+          pGroup.position.set((xIdx - 3.5) * sqSize, 0.08, (zIdx - 3.5) * sqSize);
+          chessGroup.add(pGroup);
+          return pGroup;
+        }
+
+        for (let i = 0; i < 8; i++) {
+          addPiece(i, 1, false, false);
+          addPiece(i, 6, true, false);
+          addPiece(i, 0, false, i === 3 || i === 4);
+          addPiece(i, 7, true, i === 3 || i === 4);
+        }
+
+        group.add(chessGroup);
+        return { root: group, ringMesh, animParts: {} };
+      }
+
+      /**
+       * TABLE 5: Connect 4
+       */
+      function buildConnect4Table(game) {
+        const { group, ringMesh, topY } = createTablePedestal(3.8, 3.2, 1.65, game.accentHex);
+        const c4Group = new THREE.Group();
+        c4Group.position.y = topY;
+
+        // Tray Base
+        const tray = new THREE.Mesh(
+          new THREE.BoxGeometry(2.9, 0.14, 0.65),
+          new THREE.MeshStandardMaterial({ color: '#1d4ed8', roughness: 0.35 })
+        );
+        tray.position.y = 0.07;
+        c4Group.add(tray);
+
+        // Vertical Slotted Blue Frame
+        const frame = new THREE.Mesh(
+          new THREE.BoxGeometry(2.6, 1.85, 0.22),
+          new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.3, metalness: 0.1 })
+        );
+        frame.position.y = 1.05;
+        frame.castShadow = true;
+        c4Group.add(frame);
+
+        // Red & Yellow Discs visible on both faces
+        const redMat = new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.25 });
+        const yelMat = new THREE.MeshStandardMaterial({ color: '#facc15', roughness: 0.25 });
+
+        for (let col = 0; col < 7; col++) {
+          for (let row = 0; row < 5; row++) {
+            const disc = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.13, 0.13, 0.25, 18),
+              (col + row) % 2 === 0 ? redMat : yelMat
+            );
+            disc.rotation.x = Math.PI / 2;
+            disc.position.set((col - 3) * 0.34, 0.34 + row * 0.32, 0);
+            c4Group.add(disc);
+          }
+        }
+
+        group.add(c4Group);
+        return { root: group, ringMesh, animParts: {} };
+      }
+
+      /**
+       * TABLE 6: Minesweeper
+       */
+      function buildMinesweeperTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.0, 4.0, 1.65, game.accentHex);
+        const msGroup = new THREE.Group();
+        msGroup.position.y = topY;
+
+        const tileMatCovered = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.35 });
+        const tileMatOpen = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6 });
+        const flagMat = new THREE.MeshStandardMaterial({ color: '#ef4444' });
+
+        const gridN = 6;
+        const step = 0.52;
+        for (let r = 0; r < gridN; r++) {
+          for (let c = 0; c < gridN; c++) {
+            const isOpen = (r + c) % 3 === 0;
+            const tile = new THREE.Mesh(
+              new THREE.BoxGeometry(0.46, isOpen ? 0.06 : 0.14, 0.46),
+              isOpen ? tileMatOpen : tileMatCovered
+            );
+            tile.position.set((c - 2.5) * step, isOpen ? 0.03 : 0.07, (r - 2.5) * step);
+            tile.castShadow = true;
+            tile.receiveShadow = true;
+            msGroup.add(tile);
+
+            // Red warning flag on specific tiles
+            if (!isOpen && (r * 3 + c) % 5 === 0) {
+              const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.02, 0.02, 0.32, 8),
+                new THREE.MeshStandardMaterial({ color: '#1e293b' })
+              );
+              pole.position.set((c - 2.5) * step, 0.28, (r - 2.5) * step);
+              const flag = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 4), flagMat);
+              flag.rotation.z = -Math.PI / 2;
+              flag.position.set((c - 2.5) * step + 0.08, 0.38, (r - 2.5) * step);
+              msGroup.add(pole, flag);
+            }
+          }
+        }
+
+        // Classic Spiked Naval Mine Emblem on Corner
+        const mineSphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.24, 16, 16),
+          new THREE.MeshStandardMaterial({ color: '#18181b', roughness: 0.3, metalness: 0.7 })
+        );
+        mineSphere.position.set(1.25, 0.34, 1.25);
+        msGroup.add(mineSphere);
+
+        group.add(msGroup);
+        return { root: group, ringMesh, animParts: {} };
+      }
+
+      /**
+       * TABLE 7: 3D Snooker (Full-size Mahogany Table)
+       */
+      function buildSnookerTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(4.2, 6.8, 1.65, game.accentHex);
+        const snookerGroup = new THREE.Group();
+        snookerGroup.position.y = topY;
+
+        // Lush Green Baize Felt
+        const baize = new THREE.Mesh(
+          new THREE.BoxGeometry(3.4, 0.08, 6.0),
+          new THREE.MeshStandardMaterial({ color: '#0f6b43', roughness: 0.85 })
+        );
+        baize.position.y = 0.04;
+        baize.receiveShadow = true;
+        snookerGroup.add(baize);
+
+        // Mahogany Rails
+        const railMat = new THREE.MeshStandardMaterial({ color: '#5c2c16', roughness: 0.35, metalness: 0.15 });
+        const longRailL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 6.4), railMat);
+        longRailL.position.set(-1.82, 0.14, 0);
+        const longRailR = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 6.4), railMat);
+        longRailR.position.set(1.82, 0.14, 0);
+        const shortRailT = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.24, 0.26), railMat);
+        shortRailT.position.set(0, 0.14, -3.08);
+        const shortRailB = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.24, 0.26), railMat);
+        shortRailB.position.set(0, 0.14, 3.08);
+        snookerGroup.add(longRailL, longRailR, shortRailT, shortRailB);
+
+        // Triangle Rack of Red Snooker Balls
+        const redBallMat = new THREE.MeshStandardMaterial({ color: '#dc2626', roughness: 0.15, metalness: 0.1 });
+        const ballR = 0.11;
+        for (let row = 0; row < 5; row++) {
+          for (let col = 0; col <= row; col++) {
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(ballR, 14, 14), redBallMat);
+            ball.position.set(
+              (col - row * 0.5) * (ballR * 2.1),
+              0.08 + ballR,
+              -1.1 - row * (ballR * 1.85)
+            );
+            ball.castShadow = true;
+            snookerGroup.add(ball);
+          }
+        }
+
+        // Cue Ball + Colored Balls (Pink, Blue, Black)
+        const cueBall = new THREE.Mesh(
+          new THREE.SphereGeometry(ballR, 14, 14),
+          new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.12 })
+        );
+        cueBall.position.set(0.25, 0.08 + ballR, 1.85);
+        cueBall.castShadow = true;
+
+        const blueBall = new THREE.Mesh(
+          new THREE.SphereGeometry(ballR, 14, 14),
+          new THREE.MeshStandardMaterial({ color: '#2563eb', roughness: 0.12 })
+        );
+        blueBall.position.set(0, 0.08 + ballR, 0);
+
+        // Wooden Cue Stick resting across the baulk end
+        const cueStick = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.02, 0.055, 3.4, 12),
+          new THREE.MeshStandardMaterial({ color: '#d97706', roughness: 0.35 })
+        );
+        cueStick.rotation.set(Math.PI / 2 - 0.05, 0, -0.35);
+        cueStick.position.set(0.65, 0.36, 2.35);
+        cueStick.castShadow = true;
+
+        snookerGroup.add(cueBall, blueBall, cueStick);
+        group.add(snookerGroup);
+        return { root: group, ringMesh, animParts: {} };
+      }
+
+      // Instantiate all 7 tables into the 3D scene
+      const builders = {
+        'monopoly': buildMonopolyTable,
+        'tower-defence': buildTowerDefenceTable,
+        'battleships': buildBattleshipsTable,
+        'chess': buildChessTable,
+        'connect4': buildConnect4Table,
+        'minesweeper': buildMinesweeperTable,
+        'snooker': buildSnookerTable
+      };
+
+      GAMES.forEach((game) => {
+        const built = builders[game.id](game);
+        built.root.position.set(game.position.x, 0, game.position.z);
+        scene.add(built.root);
+
+        // Invisible generous hit-box collider so tapping/clicking on mobile & desktop is effortless
+        const hitBox = new THREE.Mesh(
+          new THREE.BoxGeometry(5.0, 3.4, game.id === 'snooker' ? 7.2 : 5.0),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hitBox.position.set(game.position.x, 1.6, game.position.z);
+        hitBox.userData.gameId = game.id;
+        scene.add(hitBox);
+        raycastTargets.push(hitBox);
+
+        tableObjects[game.id] = {
+          game,
+          root: built.root,
+          ringMesh: built.ringMesh,
+          animParts: built.animParts,
+          targetY: 0,
+          targetScale: 1
+        };
+      });
+
+      /**
+       * ============================================================================
+       * 6. RAYCASTING (HOVER & CLICK SELECTION IN 3D)
+       * ============================================================================
+       */
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2(-999, -999);
+      const hoverPill = document.getElementById('hover-pill');
+      const hoverTitle = document.getElementById('hover-title');
+      const hoverMeta = document.getElementById('hover-meta');
+      const hoverDot = document.getElementById('hover-dot');
+
+      let pointerDownPos = { x: 0, y: 0 };
+
+      function updatePointerCoords(clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      }
+
+      renderer.domElement.addEventListener('pointermove', (e) => {
+        updatePointerCoords(e.clientX, e.clientY);
+
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(raycastTargets, false);
+
+        if (hits.length > 0) {
+          const hitGameId = hits[0].object.userData.gameId;
+          state.hoveredGameId = hitGameId;
+          renderer.domElement.style.cursor = 'pointer';
+
+          const game = GAMES.find((g) => g.id === hitGameId);
+          if (game) {
+            hoverTitle.textContent = game.title;
+            hoverMeta.textContent = game.tag;
+            hoverDot.className = `w-2.5 h-2.5 rounded-full animate-pulse-soft ${game.dotClass}`;
+            hoverPill.style.left = `${e.clientX}px`;
+            hoverPill.style.top = `${e.clientY}px`;
+            hoverPill.classList.remove('opacity-0');
+          }
+        } else {
+          state.hoveredGameId = null;
+          renderer.domElement.style.cursor = 'grab';
+          hoverPill.classList.add('opacity-0');
+        }
+      });
+
+      renderer.domElement.addEventListener('pointerdown', (e) => {
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+      });
+
+      renderer.domElement.addEventListener('pointerup', (e) => {
+        const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+        // Only treat as a click/tap if user didn't drag to orbit
+        if (dist < 6) {
+          updatePointerCoords(e.clientX, e.clientY);
+          raycaster.setFromCamera(pointer, camera);
+          const hits = raycaster.intersectObjects(raycastTargets, false);
+          if (hits.length > 0) {
+            selectGameTable(hits[0].object.userData.gameId);
+          }
+        }
+      });
+
+      /**
+       * ============================================================================
+       * 7. UI CONTROLLERS: TABLE SELECTION, CATEGORY FILTERS, THEME & DIRECTORY
+       * ============================================================================
+       */
+      const detailCard = document.getElementById('game-detail-card');
+      const detailBadge = document.getElementById('detail-badge');
+      const detailZone = document.getElementById('detail-zone');
+      const detailTitle = document.getElementById('detail-title');
+      const detailDesc = document.getElementById('detail-desc');
+      const detailHighlights = document.getElementById('detail-highlights');
+      const btnLaunchText = document.getElementById('btn-launch-text');
+      const heroBanner = document.getElementById('hero-banner');
+
+      function selectGameTable(gameId) {
+        const game = GAMES.find((g) => g.id === gameId);
+        if (!game) return;
+
+        state.selectedGameId = game.id;
+        state.inspectedIds.add(game.id);
+        document.getElementById('stat-visited').textContent = `${state.inspectedIds.size} / 7`;
+
+        // Smooth camera flight to selected game table
+        state.desiredTarget.set(game.position.x, 1.5, game.position.z);
+        state.desiredCamPos.set(game.camOffset.x, game.camOffset.y, game.camOffset.z);
+        state.isTransitioning = true;
+
+        // Populate detail card
+        detailBadge.textContent = game.tag;
+        detailZone.textContent = game.categoryLabel;
+        detailTitle.textContent = game.title;
+        detailDesc.textContent = game.description;
+        btnLaunchText.textContent = `Play ${game.title} →`;
+
+        detailHighlights.innerHTML = game.highlights
+          .map(
+            (item) =>
+              `<span class="px-2.5 py-1 rounded-lg bg-stone-200/80 dark:bg-white/5 border border-stone-300/70 dark:border-white/10 font-mono text-[10px] text-stone-700 dark:text-stone-300">${item}</span>`
+          )
+          .join('');
+
+        // Show card smoothly
+        detailCard.classList.remove('hidden', 'pointer-events-none');
+        detailCard.classList.add('flex');
+        requestAnimationFrame(() => {
+          detailCard.classList.remove('translate-y-6', 'opacity-0');
+          detailCard.classList.add('translate-y-0', 'opacity-100');
+        });
+
+        // On mobile screens, compact hero banner so detail card shines
+        if (window.innerWidth < 768) {
+          heroBanner.classList.add('hidden');
+        }
+
+        updateDirectoryActiveState();
+      }
+
+      function closeDetailCard() {
+        state.selectedGameId = null;
+        detailCard.classList.add('translate-y-6', 'opacity-0', 'pointer-events-none');
+        setTimeout(() => {
+          if (!state.selectedGameId) {
+            detailCard.classList.add('hidden');
+            detailCard.classList.remove('flex');
+          }
+        }, 280);
+        heroBanner.classList.remove('hidden');
+        updateDirectoryActiveState();
+      }
+
+      function flyToCategory(categoryKey) {
+        state.activeCategory = categoryKey;
+        const preset = CATEGORY_VIEWS[categoryKey] || CATEGORY_VIEWS.all;
+        state.desiredCamPos.copy(preset.pos);
+        state.desiredTarget.copy(preset.target);
+        state.isTransitioning = true;
+
+        // Update Category Pill UI
+        document.querySelectorAll('.cat-pill').forEach((pill) => {
+          const isMatch = pill.dataset.category === categoryKey;
+          if (isMatch) {
+            pill.classList.add('bg-amber-500', 'text-stone-950', 'border-amber-400', 'shadow-lg', 'shadow-amber-500/20');
+            pill.classList.remove('bg-white/75', 'dark:bg-stone-900/70', 'text-stone-700', 'dark:text-stone-200', 'border-stone-300/70', 'dark:border-white/10');
+          } else {
+            pill.classList.remove('bg-amber-500', 'text-stone-950', 'border-amber-400', 'shadow-lg', 'shadow-amber-500/20');
+            pill.classList.add('bg-white/75', 'dark:bg-stone-900/70', 'text-stone-700', 'dark:text-stone-200', 'border-stone-300/70', 'dark:border-white/10');
+          }
+        });
+
+        renderDirectoryCards();
+      }
+
+      // Build Bottom Directory Cards
+      const directoryContainer = document.getElementById('directory-cards');
+
+      function renderDirectoryCards() {
+        const filtered =
+          state.activeCategory === 'all'
+            ? GAMES
+            : GAMES.filter((g) => g.category === state.activeCategory);
+
+        directoryContainer.innerHTML = filtered
+          .map((game) => {
+            const isSelected = state.selectedGameId === game.id;
+            return `
+              <button data-game-id="${game.id}"
+                class="dir-card glass-panel shrink-0 w-48 sm:w-52 p-3 rounded-2xl text-left border transition-all ${
+                  isSelected
+                    ? 'bg-amber-500/20 border-amber-400 shadow-lg shadow-amber-500/15'
+                    : 'bg-white/80 dark:bg-stone-900/75 border-stone-300/70 dark:border-white/10 hover:border-amber-500/50'
+                }">
+                <div class="flex items-center justify-between gap-1.5">
+                  <span class="w-2 h-2 rounded-full ${game.dotClass}"></span>
+                  <span class="font-mono text-[9px] uppercase tracking-wider text-stone-500 dark:text-stone-400 truncate">${game.tag.split('·')[1] || game.tag}</span>
+                </div>
+                <div class="font-display font-bold text-sm text-stone-900 dark:text-white mt-1.5 truncate">${game.title}</div>
+                <div class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-1 flex items-center justify-between">
+                  <span>Inspect Table</span>
+                  <span>→</span>
+                </div>
+              </button>
+            `;
+          })
+          .join('');
+
+        document.querySelectorAll('.dir-card').forEach((card) => {
+          card.addEventListener('click', () => {
+            selectGameTable(card.dataset.gameId);
+          });
+        });
+      }
+
+      function updateDirectoryActiveState() {
+        renderDirectoryCards();
+      }
+
+      renderDirectoryCards();
+
+      // Category Pill Event Listeners
+      document.querySelectorAll('.cat-pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          closeDetailCard();
+          flyToCategory(pill.dataset.category);
+        });
+      });
+
+      // Reset Room & Detail Card Controls
+      document.getElementById('btn-reset-room').addEventListener('click', () => {
+        closeDetailCard();
+        flyToCategory('all');
+      });
+
+      document.getElementById('btn-close-detail').addEventListener('click', closeDetailCard);
+
+      document.getElementById('btn-overview-cam').addEventListener('click', () => {
+        flyToCategory(state.activeCategory);
+      });
+
+      document.getElementById('btn-prev-table').addEventListener('click', () => {
+        const idx = GAMES.findIndex((g) => g.id === state.selectedGameId);
+        const prevIdx = (idx - 1 + GAMES.length) % GAMES.length;
+        selectGameTable(GAMES[prevIdx].id);
+      });
+
+      document.getElementById('btn-next-table').addEventListener('click', () => {
+        const idx = GAMES.findIndex((g) => g.id === state.selectedGameId);
+        const nextIdx = (idx + 1) % GAMES.length;
+        selectGameTable(GAMES[nextIdx].id);
+      });
+
+      // Directory Collapse Toggle
+      const directoryStrip = document.getElementById('directory-strip');
+      const directoryChevron = document.getElementById('directory-chevron');
+      document.getElementById('btn-toggle-directory').addEventListener('click', () => {
+        state.directoryOpen = !state.directoryOpen;
+        if (state.directoryOpen) {
+          directoryStrip.classList.remove('max-h-0', 'opacity-0');
+          directoryStrip.classList.add('max-h-40', 'opacity-100');
+          directoryChevron.style.transform = 'rotate(0deg)';
+        } else {
+          directoryStrip.classList.add('max-h-0', 'opacity-0');
+          directoryStrip.classList.remove('max-h-40', 'opacity-100');
+          directoryChevron.style.transform = 'rotate(180deg)';
+        }
+      });
+
+      /**
+       * ============================================================================
+       * 8. DARK / LIGHT THEME TOGGLE (Updates HUD + 3D Parlor Lighting & Skybox)
+       * ============================================================================
+       */
+      function toggleTheme() {
+        state.isDark = !state.isDark;
+        const htmlEl = document.documentElement;
+        const labelDesktop = document.getElementById('theme-label-desktop');
+
+        if (state.isDark) {
+          htmlEl.classList.add('dark');
+          document.body.classList.remove('bg-lounge-light', 'text-stone-900');
+          document.body.classList.add('bg-lounge-dark', 'text-stone-100');
+          if (labelDesktop) labelDesktop.textContent = 'Sunlit Parlor';
+
+          // Evening Lounge 3D Atmosphere
+          scene.background.set('#0c0e12');
+          scene.fog.color.set('#0c0e12');
+          hemiLight.intensity = 0.65;
+          mainDirLight.intensity = 1.15;
+          mainDirLight.color.set('#ffdfa8');
+          zoneSpot1.intensity = 1.1;
+          zoneSpot2.intensity = 1.0;
+          zoneSpot3.intensity = 1.1;
+          particleMat.color.set('#fcd34d');
+          renderer.toneMappingExposure = 1.15;
+        } else {
+          htmlEl.classList.remove('dark');
+          document.body.classList.remove('bg-lounge-dark', 'text-stone-100');
+          document.body.classList.add('bg-lounge-light', 'text-stone-900');
+          if (labelDesktop) labelDesktop.textContent = 'Evening Lounge';
+
+          // Bright Sunlit Game Parlor 3D Atmosphere
+          scene.background.set('#e8dfd1');
+          scene.fog.color.set('#e8dfd1');
+          hemiLight.intensity = 1.15;
+          mainDirLight.intensity = 1.55;
+          mainDirLight.color.set('#fffbeb');
+          zoneSpot1.intensity = 0.35;
+          zoneSpot2.intensity = 0.35;
+          zoneSpot3.intensity = 0.35;
+          particleMat.color.set('#d97706');
+          renderer.toneMappingExposure = 1.08;
+        }
+      }
+
+      document.getElementById('btn-theme-desktop').addEventListener('click', toggleTheme);
+      document.getElementById('btn-theme-mobile').addEventListener('click', toggleTheme);
+
+      /**
+       * ============================================================================
+       * 9. MODALS: PLAYER ACCOUNTS & GAME LAUNCH BRIDGE
+       * ============================================================================
+       */
+      const accountModal = document.getElementById('account-modal');
+      function openAccountModal() {
+        accountModal.classList.remove('hidden');
+        accountModal.classList.add('flex');
+      }
+      function closeAccountModal() {
+        accountModal.classList.add('hidden');
+        accountModal.classList.remove('flex');
+      }
+
+      document.getElementById('btn-account-desktop').addEventListener('click', openAccountModal);
+      document.getElementById('btn-account-mobile').addEventListener('click', openAccountModal);
+      document.getElementById('btn-close-account').addEventListener('click', closeAccountModal);
+
+      document.getElementById('btn-save-player').addEventListener('click', () => {
+        const fb = document.getElementById('account-feedback');
+        fb.classList.remove('hidden');
+        setTimeout(() => fb.classList.add('hidden'), 2600);
+      });
+
+      // Launch Game Modal
+      const launchModal = document.getElementById('launch-modal');
+      document.getElementById('btn-launch-game').addEventListener('click', () => {
+        const game = GAMES.find((g) => g.id === state.selectedGameId);
+        if (!game) return;
+        document.getElementById('launch-badge').textContent = game.tag;
+        document.getElementById('launch-title').textContent = game.title;
+        document.getElementById('launch-url-preview').textContent = game.url;
+        document.getElementById('btn-confirm-external').href = game.url;
+        launchModal.classList.remove('hidden');
+        launchModal.classList.add('flex');
+      });
+
+      document.getElementById('btn-cancel-launch').addEventListener('click', () => {
+        launchModal.classList.add('hidden');
+        launchModal.classList.remove('flex');
+      });
+
+      /**
+       * ============================================================================
+       * 10. WINDOW RESIZE & REAL-TIME ANIMATION LOOP
+       * ============================================================================
+       */
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const elapsed = clock.getElapsedTime();
+
+        // Smooth camera flight interpolation
+        if (state.isTransitioning) {
+          camera.position.lerp(state.desiredCamPos, 0.065);
+          controls.target.lerp(state.desiredTarget, 0.075);
+
+          if (
+            camera.position.distanceTo(state.desiredCamPos) < 0.06 &&
+            controls.target.distanceTo(state.desiredTarget) < 0.06
+          ) {
+            state.isTransitioning = false;
+          }
+        }
+
+        // Animate each of the 7 3D game tables (elevation on hover/select + micro-details)
+        GAMES.forEach((game, idx) => {
+          const obj = tableObjects[game.id];
+          const isHovered = state.hoveredGameId === game.id;
+          const isSelected = state.selectedGameId === game.id;
+          const isDimmedByFilter =
+            state.activeCategory !== 'all' && game.category !== state.activeCategory;
+
+          // Subtle float elevation when hovered or selected
+          const targetY = isSelected ? 0.28 : isHovered ? 0.18 : 0;
+          obj.root.position.y += (targetY - obj.root.position.y) * 0.12;
+
+          // Glow ring opacity & pulse
+          const targetOpacity = isDimmedByFilter
+            ? 0.05
+            : isSelected
+            ? 0.92
+            : isHovered
+            ? 0.72
+            : 0.24 + Math.sin(elapsed * 2 + idx) * 0.06;
+          obj.ringMesh.material.opacity += (targetOpacity - obj.ringMesh.material.opacity) * 0.12;
+
+          // Table-specific ambient life animations
+          if (obj.animParts.crystal) {
+            obj.animParts.crystal.rotation.y = elapsed * 1.4;
+            obj.animParts.crystal.position.y = 0.55 + Math.sin(elapsed * 2.5) * 0.06;
+          }
+          if (obj.animParts.dice1 && obj.animParts.dice2) {
+            obj.animParts.dice1.rotation.y = 0.5 + Math.sin(elapsed * 1.2) * 0.2;
+            obj.animParts.dice2.rotation.y = 0.9 - Math.cos(elapsed * 1.2) * 0.2;
+          }
+        });
+
+        // Gentle drift of ambient parlor dust motes
+        ambientParticles.rotation.y = elapsed * 0.025;
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      window.onload = function () {
+        animate();
+      };
+    })();
+  </script>
+</body>
+</html>
