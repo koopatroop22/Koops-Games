@@ -1017,10 +1017,12 @@
         const hostBtn = document.getElementById("online-host-btn");
         const joinBtn = document.getElementById("online-join-btn");
         const copyBtn = document.getElementById("online-copy-btn");
+        const shareBtn = document.getElementById("online-share-btn");
         const leaveBtn = document.getElementById("online-leave-btn");
         if (label && code) label.classList.remove("hidden");
         if (value) value.textContent = code;
         if (copyBtn) copyBtn.classList.toggle("hidden", !code);
+        if (shareBtn) shareBtn.classList.toggle("hidden", !code);
         if (leaveBtn) leaveBtn.classList.toggle("hidden", !code);
         if (hostBtn) hostBtn.disabled = Boolean(code);
         if (joinBtn) joinBtn.disabled = Boolean(code);
@@ -2617,6 +2619,9 @@
         try {
           const code = await monopolyOnline.join(document.getElementById("online-room-code").value, document.getElementById("online-player-name").value);
           document.getElementById("online-room-code").value = code;
+          const cleanInviteUrl = new URL(window.location.href);
+          cleanInviteUrl.searchParams.delete("room");
+          window.history.replaceState({}, "", cleanInviteUrl);
           setOnlineStatus(`Joined room ${code}.`);
         } catch (error) {
           setOnlineStatus(onlineErrorMessage(error), true);
@@ -2681,6 +2686,17 @@
           setOnlineStatus("Select and copy the room code shown above.", true);
         }
       });
+      document.getElementById("online-share-btn").addEventListener("click", async () => {
+        if (!monopolyOnline.code) return;
+        const inviteUrl = new URL(window.location.href);
+        inviteUrl.searchParams.set("room", monopolyOnline.code);
+        try {
+          await navigator.clipboard.writeText(inviteUrl.toString());
+          setOnlineStatus("Invite link copied. Your friend can set a temporary name and join.");
+        } catch {
+          setOnlineStatus(`Copy this invite link: ${inviteUrl.toString()}`);
+        }
+      });
       document.getElementById("online-leave-btn").addEventListener("click", async () => {
         const wasWaiting = game.onlineRoom?.status === "waiting";
         const wasHost = monopolyOnline.isHost;
@@ -2699,6 +2715,7 @@
         document.getElementById("online-room-members").innerHTML = "";
         document.getElementById("online-room-code-label").classList.add("hidden");
         document.getElementById("online-copy-btn").classList.add("hidden");
+        document.getElementById("online-share-btn").classList.add("hidden");
         document.getElementById("online-leave-btn").classList.add("hidden");
         document.getElementById("online-start-btn").classList.add("hidden");
         document.getElementById("online-host-btn").disabled = false;
@@ -2708,6 +2725,14 @@
       });
 
       document.getElementById("start-match-btn").addEventListener("click", () => startNewMatch());
+
+      const inviteCode = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+      if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(inviteCode || "")) {
+        setSetupMode(true);
+        document.getElementById("online-room-code").value = inviteCode;
+        setOnlineStatus("You were invited to this room. Set your temporary name, check the host's map and house rules, then join.");
+        requestAnimationFrame(() => document.getElementById("online-player-name")?.focus());
+      }
       document.getElementById("new-game-btn").addEventListener("click", () => {
         game.started = false;
         document.getElementById("game-hud").classList.add("hidden");

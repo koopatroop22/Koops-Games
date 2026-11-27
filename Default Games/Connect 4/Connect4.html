@@ -286,7 +286,7 @@
           </div>
           <div id="online-room-code-display" class="mt-3 hidden items-center justify-between gap-3 rounded-xl border border-emerald-300/25 bg-slate-950/70 px-3 py-2.5">
             <div><span class="block text-[9px] font-semibold uppercase tracking-wider text-slate-400">Share this room code</span><strong id="online-room-code-value" class="font-mono text-lg tracking-[0.22em] text-emerald-200"></strong></div>
-            <button id="online-copy-code-btn" type="button" class="hud-btn rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/10">Copy</button>
+            <button id="online-copy-code-btn" type="button" class="hud-btn rounded-lg border border-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/10">Copy invite link</button>
           </div>
           <p id="online-room-status" class="mt-3 min-h-4 text-[11px] text-slate-300" role="status" aria-live="polite">Online rooms need Firebase Anonymous sign-in and the Connect 4 database rules.</p>
         </div>
@@ -2797,6 +2797,14 @@
 
           this.bindUI();
           this.enterMainMenu(true);
+          const inviteCode = new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase();
+          if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(inviteCode || '')) {
+            this.mode = 'online';
+            this.syncMenuControls();
+            this.onlineRoomCodeInput.value = inviteCode;
+            this.setOnlineStatus('You were invited to this room. Set your temporary name and preferred table atmosphere, then join.');
+            requestAnimationFrame(() => this.onlineNameInput?.focus());
+          }
         }
 
         cacheDom() {
@@ -3131,6 +3139,9 @@
             this.onlineHasStarted = false;
             this.onlineRoomCodeDisplay.classList.add('hidden');
             if (this.onlineNameInput) this.onlineNameInput.disabled = true;
+            const cleanInviteUrl = new URL(window.location.href);
+            cleanInviteUrl.searchParams.delete('room');
+            window.history.replaceState({}, '', cleanInviteUrl);
             this.listenToOnlineRoom(roomRef, code);
             this.setOnlineStatus('Joined. Starting the match…');
           } catch (error) {
@@ -3861,11 +3872,13 @@
           if (this.onlineCopyCodeBtn) {
             this.onlineCopyCodeBtn.addEventListener('click', async () => {
               if (!this.onlineRoomCode) return;
+              const inviteUrl = new URL(window.location.href);
+              inviteUrl.searchParams.set('room', this.onlineRoomCode);
               try {
-                await navigator.clipboard.writeText(this.onlineRoomCode);
-                this.setOnlineStatus('Room code copied. Send it to your friend.');
+                await navigator.clipboard.writeText(inviteUrl.toString());
+                this.setOnlineStatus('Invite link copied. Your friend can open it, set a name and join.');
               } catch {
-                this.setOnlineStatus(`Share room code ${this.onlineRoomCode} with your friend.`);
+                this.setOnlineStatus(`Copy this invite link: ${inviteUrl.toString()}`);
               }
             });
           }

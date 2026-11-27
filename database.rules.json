@@ -231,7 +231,7 @@
             ".validate": "newData.isNumber()"
           },
           "updatedBy": {
-            ".validate": "newData.isString() && (newData.val() === data.parent().child('players/seat1/uid').val() || newData.val() === data.parent().child('players/seat2/uid').val() || newData.val() === data.parent().child('players/seat3/uid').val() || newData.val() === data.parent().child('players/seat4/uid').val())"
+            ".validate": "newData.isString() && newData.val() === auth.uid"
           },
           "turnIndex": {
             ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
