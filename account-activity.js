@@ -1,7 +1,7 @@
 import { getActiveProfile, updateLocalProfile } from './local-profile-store.js';
 
 const gameId = document.body.dataset.gameId;
-const allowed = new Set(['monopoly', 'snooker', 'tower-defence', 'battleships', 'chess', 'connect4', 'minesweeper']);
+const allowed = new Set(['monopoly', 'snooker', 'tower-defence', 'battleships', 'chess', 'connect4', 'minesweeper', 'poker']);
 let profile = null;
 try {
   profile = getActiveProfile();

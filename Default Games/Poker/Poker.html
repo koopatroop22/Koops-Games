@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Koops Games — 3D Texas Hold'em Poker</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Fraunces (Display), Plus Jakarta Sans (UI), JetBrains Mono (Chips & Badges) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Three.js r128 & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Fraunces', 'Georgia', 'serif'],
+            sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            parlor: {
+              dark: '#090b0f',
+              amber: '#e59a3c',
+              gold: '#fbbf24',
+              emerald: '#10b981',
+              crimson: '#e11d48',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      background-color: #090b0f;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      outline: none;
+    }
+
+    .glass-panel {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .thin-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .thin-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(245, 158, 11, 0.35);
+      border-radius: 9999px;
+    }
+
+    /* Custom Bet Slider */
+    input[type="range"].poker-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      outline: none;
+    }
+    input[type="range"].poker-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fbbf24, #d97706);
+      border: 2px solid #fffbeb;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.6);
+    }
+    input[type="range"].poker-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fbbf24, #d97706);
+      border: 2px solid #fffbeb;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.6);
+    }
+  </style>
+</head>
+<body class="font-sans text-stone-100" data-game-id="poker">
+
+  <!-- 3D Poker Parlor Canvas -->
+  <div id="canvas-container" aria-label="3D Texas Hold'em Poker Table"></div>
+
+  <!-- Required age and free-play agreement. The poker hand starts only after acceptance. -->
+  <section id="poker-safety-gate" class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-stone-950/90 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="poker-safety-title" aria-describedby="poker-safety-copy">
+    <div class="glass-panel my-auto w-full max-w-xl rounded-3xl border border-amber-400/40 bg-stone-950/95 p-5 shadow-2xl shadow-black/50 sm:p-7">
+      <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-amber-200">
+        <span aria-hidden="true">18+</span><span>Adults · Free play only</span>
+      </div>
+      <h1 id="poker-safety-title" class="font-display text-2xl font-bold text-white sm:text-3xl">Before you play Poker</h1>
+      <div id="poker-safety-copy" class="mt-3 space-y-3 text-sm leading-relaxed text-stone-300">
+        <p><strong class="text-amber-200">Adults 18+ only.</strong> This is a poker simulation that uses fictional chips for gameplay and scoring. Chips have no real-world value and cannot be purchased, sold, transferred, redeemed, or exchanged for money, products, or prizes. There are no deposits or withdrawals.</p>
+        <p>Poker can resemble gambling and may be uncomfortable or triggering. Take breaks and stop if the game stops feeling enjoyable. This game does not offer real-money gambling.</p>
+      </div>
+      <label for="poker-safety-agree" class="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3.5 text-xs font-medium leading-relaxed text-stone-200">
+        <input id="poker-safety-agree" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-amber-400" />
+        <span>I confirm that I am 18 or older and agree to play with free, fictional chips only under the terms above.</span>
+      </label>
+      <button id="poker-safety-accept" type="button" disabled class="mt-4 w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-5 py-3 font-bold text-stone-950 shadow-lg shadow-amber-500/20 transition enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
+        Accept and Enter Poker
+      </button>
+      <a href="../../index.html" class="mt-3 block rounded-xl px-4 py-2 text-center text-xs font-semibold text-stone-400 transition hover:bg-white/5 hover:text-white">Decline and return to Koops Games</a>
+    </div>
+  </section>
+
+  <!-- Floating Status / Event Toast -->
+  <div id="event-toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none opacity-0 -translate-y-2 transition-all duration-300">
+    <div class="glass-panel px-4 py-2 rounded-full bg-stone-950/90 border border-amber-400/50 shadow-2xl flex items-center gap-2 text-xs font-semibold text-amber-100">
+      <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+      <span id="event-toast-text">Pre-Flop Blinds Posted</span>
+    </div>
+  </div>
+
+  <!-- HUD OVERLAY -->
+  <div class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-2.5 sm:p-4 lg:p-5">
+
+    <!-- TOP BAR: Brand, Main Menu Link, Pot & Street Readout, Sound, Rules, Graphics Settings -->
+    <header class="w-full flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+      <!-- Left: Back to Menu + Title -->
+      <div class="flex items-center gap-2">
+        <a href="../../index.html" title="Back to Koops Games Hub"
+          class="glass-panel flex items-center gap-1.5 px-3 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-white/15 hover:border-amber-400/60 text-xs font-semibold text-stone-200 transition-all shadow-lg">
+          <span class="text-amber-400">←</span>
+          <span class="hidden sm:inline">Game Hub</span>
+        </a>
+
+        <div class="glass-panel flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-stone-900/80 border border-amber-500/35 shadow-lg">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 flex items-center justify-center font-display font-bold text-stone-950 text-base shadow">
+            ♠
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="font-display font-bold text-xs sm:text-sm text-white tracking-tight">KOOPS POKER 3D</span>
+              <span class="font-mono text-[9px] uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">HOLD'EM</span>
+            </div>
+            <div id="hud-hand-num" class="font-mono text-[10px] text-stone-400">Hand #1 · Blinds $10/$20</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Live Pot & Street Pill -->
+      <div class="glass-panel flex items-center gap-3 px-4 py-2 rounded-2xl bg-stone-950/85 border border-amber-400/40 shadow-xl">
+        <div class="text-center">
+          <div class="font-mono text-[9px] uppercase tracking-widest text-stone-400">Street</div>
+          <div id="hud-street" class="font-mono text-xs font-bold text-amber-300">PRE-FLOP</div>
+        </div>
+        <div class="h-6 w-px bg-white/15"></div>
+        <div class="text-center">
+          <div class="font-mono text-[9px] uppercase tracking-widest text-stone-400">Main Pot</div>
+          <div id="hud-pot" class="font-mono text-sm sm:text-base font-bold text-emerald-400">$30</div>
+        </div>
+        <div class="hidden md:block h-6 w-px bg-white/15"></div>
+        <div class="hidden md:block text-center">
+          <div class="font-mono text-[9px] uppercase tracking-widest text-stone-400">Your Hand</div>
+          <div id="hud-hand-eval" class="text-xs font-semibold text-stone-200">Dealing...</div>
+        </div>
+      </div>
+
+      <!-- Right: Camera Views, Sound, Rules, Graphics Settings -->
+      <div class="flex items-center gap-1.5">
+        <!-- Camera Angle Switcher -->
+        <div class="hidden xl:flex items-center gap-1 p-1 rounded-xl glass-panel bg-stone-900/80 border border-white/10">
+          <button data-cam="overview" class="cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500 text-stone-950">Overview</button>
+          <button data-cam="pov" class="cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-stone-300 hover:bg-white/10">Player POV</button>
+          <button data-cam="rail" class="cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-stone-300 hover:bg-white/10">Cinematic</button>
+          <button data-cam="overhead" class="cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-stone-300 hover:bg-white/10">Overhead</button>
+        </div>
+
+        <!-- Sound Toggle -->
+        <button id="btn-sound-toggle" title="Toggle Synthesized Audio SFX"
+          class="glass-panel px-2.5 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-white/15 text-xs font-semibold text-stone-200 flex items-center gap-1">
+          <span id="sound-icon">🔊</span>
+          <span class="hidden sm:inline" id="sound-label">SFX On</span>
+        </button>
+
+        <!-- Rules & Hand Rankings Button -->
+        <button id="btn-open-rules"
+          class="glass-panel px-3 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-white/15 hover:border-amber-400/50 text-xs font-semibold text-stone-200 flex items-center gap-1.5">
+          <span>📖</span>
+          <span class="hidden sm:inline">Rules</span>
+        </button>
+
+        <!-- Graphics Settings Button -->
+        <button id="btn-open-graphics"
+          class="glass-panel px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500/25 to-orange-500/25 hover:from-amber-500/40 hover:to-orange-500/40 border border-amber-400/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 shadow-lg">
+          <span>⚙️</span>
+          <span>Graphics</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MIDDLE OVERLAY: PLAYER SEAT CARDS & COMMUNITY CARDS SUMMARY STRIP -->
+    <div class="w-full flex flex-col justify-between flex-1 my-2 pointer-events-none">
+
+      <!-- Top/Side Seats Row (AI Opponents Live Readout) -->
+      <div id="seats-hud-row" class="w-full grid grid-cols-2 md:grid-cols-4 gap-2 pointer-events-auto">
+        <!-- Populated dynamically for each seat -->
+      </div>
+
+      <!-- Center Table Info Banner (Winner / Community Cards / Deal Next Hand) -->
+      <div class="mx-auto my-auto flex flex-col items-center gap-2 pointer-events-auto">
+        <div id="community-cards-hud" class="glass-panel px-4 py-2 rounded-2xl bg-stone-950/75 border border-white/15 flex items-center gap-2 shadow-xl">
+          <span class="font-mono text-[10px] uppercase tracking-wider text-stone-400 mr-1">Board</span>
+          <div id="hud-board-slots" class="flex items-center gap-1.5"></div>
+        </div>
+
+        <div id="hand-result-banner" class="hidden glass-panel px-5 py-3 rounded-2xl bg-stone-950/92 border border-amber-400/60 shadow-2xl text-center max-w-md">
+          <div id="result-headline" class="font-display font-bold text-base sm:text-lg text-amber-300">KoopaTroop22 Wins $120!</div>
+          <div id="result-subtext" class="text-xs text-stone-300 mt-0.5">Full House, Kings full of Tens</div>
+          <button id="btn-next-hand"
+            class="mt-2.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-stone-950 font-bold text-xs shadow-lg">
+            Deal Next Hand →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM ACTION DOCK: PLAYER HOLE CARDS + BETTING CONTROLS -->
+    <footer class="w-full pointer-events-auto">
+      <div class="mx-auto mb-2 max-w-5xl rounded-xl border border-emerald-300/25 bg-emerald-950/80 px-3 py-2 text-center font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-100 sm:text-[10px]">
+        Free-play only · Any $ values are fictional chip scores, not currency · No real-money betting, purchases, prizes, transfers, or cash-out
+      </div>
+      <div class="max-w-5xl mx-auto glass-panel rounded-3xl p-3 sm:p-4 bg-stone-950/88 border border-white/15 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-3">
+
+        <!-- Left: Human Player Cards & Bankroll -->
+        <div class="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start">
+          <div class="flex items-center gap-2">
+            <div id="hud-player-cards" class="flex items-center gap-1.5"></div>
+          </div>
+          <div class="text-right lg:text-left">
+            <div class="flex items-center gap-1.5">
+              <span id="hud-player-name" class="text-xs sm:text-sm font-bold text-white">You (Player 1)</span>
+              <span id="hud-player-badge" class="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">DEALER</span>
+            </div>
+            <div class="font-mono text-sm sm:text-base font-bold text-amber-400">
+              Play chips: <span id="hud-player-chips">$1,000</span>
+            </div>
+            <div id="hud-player-bet-line" class="font-mono text-[10px] text-stone-400">Current Bet: $0</div>
+          </div>
+        </div>
+
+        <!-- Right: Betting Action Controls -->
+        <div id="betting-controls" class="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <!-- Primary Action Buttons -->
+          <div class="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
+            <button id="btn-fold" disabled
+              class="px-3.5 py-2.5 rounded-xl bg-rose-600/25 hover:bg-rose-600 disabled:opacity-35 disabled:pointer-events-none border border-rose-500/50 text-rose-200 hover:text-white font-bold text-xs transition-all">
+              Fold
+            </button>
+            <button id="btn-check-call" disabled
+              class="px-4 py-2.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-500 disabled:opacity-35 disabled:pointer-events-none border border-emerald-400/50 text-emerald-200 hover:text-stone-950 font-bold text-xs transition-all">
+              Check
+            </button>
+            <button id="btn-bet-raise" disabled
+              class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-35 disabled:pointer-events-none text-stone-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all">
+              Bet $20
+            </button>
+          </div>
+
+          <!-- Bet Slider & Quick Presets -->
+          <div class="flex flex-col gap-1.5 bg-white/5 px-3 py-2 rounded-2xl border border-white/10 min-w-[220px] sm:min-w-[260px]">
+            <div class="flex items-center justify-between text-[10px] font-mono">
+              <span class="text-stone-400">RAISE / BET SIZE</span>
+              <span id="bet-slider-readout" class="text-amber-300 font-bold text-xs">$20</span>
+            </div>
+            <input id="bet-slider" type="range" min="20" max="1000" step="10" value="20" disabled class="poker-slider w-full" />
+            <div class="grid grid-cols-4 gap-1">
+              <button data-preset="min" class="bet-preset py-1 rounded bg-white/10 hover:bg-amber-500/30 font-mono text-[10px] font-semibold text-stone-200">Min</button>
+              <button data-preset="half" class="bet-preset py-1 rounded bg-white/10 hover:bg-amber-500/30 font-mono text-[10px] font-semibold text-stone-200">1/2 Pot</button>
+              <button data-preset="pot" class="bet-preset py-1 rounded bg-white/10 hover:bg-amber-500/30 font-mono text-[10px] font-semibold text-stone-200">Pot</button>
+              <button data-preset="allin" class="bet-preset py-1 rounded bg-rose-500/25 hover:bg-rose-500/45 font-mono text-[10px] font-bold text-rose-200">All-In</button>
+            </div>
+          </div>
+
+          <!-- Rebuy / Reset Table Button -->
+          <button id="btn-rebuy" title="Reset free-play chip stacks to 1,000; no purchase is made"
+            class="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 font-mono text-[10px] font-bold text-stone-300">
+            Reset Chips
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- GRAPHICS SETTINGS DRAWER (REAL-TIME THREE.JS QUALITY CONTROLS) -->
+  <div id="graphics-drawer" class="fixed inset-y-0 right-0 z-50 w-full max-w-sm glass-panel bg-stone-950/95 border-l border-amber-400/40 shadow-2xl transform translate-x-full transition-transform duration-300 p-5 flex flex-col justify-between overflow-y-auto thin-scrollbar">
+    <div>
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div>
+          <span class="font-mono text-[10px] uppercase tracking-widest text-amber-400">THREE.JS ENGINE</span>
+          <h2 class="font-display font-bold text-xl text-white">Graphics Settings</h2>
+        </div>
+        <button id="btn-close-graphics" class="p-2 rounded-xl bg-white/10 hover:bg-rose-500/25 text-stone-300 hover:text-rose-300">✕</button>
+      </div>
+
+      <!-- Presets: Low, Medium, High, Ultra -->
+      <div class="mt-4">
+        <label class="block font-mono text-[10px] uppercase tracking-wider text-stone-400 mb-2">Quality Preset</label>
+        <div class="grid grid-cols-4 gap-1.5">
+          <button data-preset-gfx="low" class="gfx-preset-btn py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-stone-200">Low</button>
+          <button data-preset-gfx="medium" class="gfx-preset-btn py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-stone-200">Med</button>
+          <button data-preset-gfx="high" class="gfx-preset-btn py-2 rounded-xl bg-amber-500 text-stone-950 text-xs font-bold shadow">High</button>
+          <button data-preset-gfx="ultra" class="gfx-preset-btn py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-stone-200">Ultra</button>
+        </div>
+      </div>
+
+      <!-- Shadow Quality -->
+      <div class="mt-4 p-3 rounded-2xl bg-white/5 border border-white/10">
+        <label class="block font-mono text-[10px] uppercase tracking-wider text-stone-400 mb-1.5">Shadow Quality</label>
+        <select id="gfx-shadows" class="w-full px-3 py-2 rounded-xl bg-stone-900 border border-white/15 text-xs font-semibold text-white">
+          <option value="off">Off (Max FPS)</option>
+          <option value="medium">Medium (1024px PCF)</option>
+          <option value="ultra" selected>Ultra (2048px Soft Shadows)</option>
+        </select>
+      </div>
+
+      <!-- Pixel Ratio / Resolution Scale -->
+      <div class="mt-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+        <div class="flex justify-between text-xs font-semibold mb-1.5">
+          <span>Resolution / Pixel Ratio</span>
+          <span id="gfx-dpr-label" class="font-mono text-amber-300">1.5x</span>
+        </div>
+        <input id="gfx-dpr" type="range" min="0.75" max="2.0" step="0.25" value="1.5" class="poker-slider w-full" />
+        <div class="flex justify-between font-mono text-[9px] text-stone-500 mt-1">
+          <span>0.75x</span><span>1.0x</span><span>1.5x</span><span>2.0x Native</span>
+        </div>
+      </div>
+
+      <!-- Lighting & Glossy Reflections -->
+      <div class="mt-3 p-3 rounded-2xl bg-white/5 border border-white/10 space-y-2.5">
+        <label class="flex items-center justify-between text-xs font-semibold cursor-pointer">
+          <span>Overhead Spotlights &amp; Rim Light</span>
+          <input id="gfx-lights" type="checkbox" checked class="accent-amber-500 w-4 h-4" />
+        </label>
+        <label class="flex items-center justify-between text-xs font-semibold cursor-pointer">
+          <span>Brass &amp; Mahogany Gloss Boost</span>
+          <input id="gfx-gloss" type="checkbox" checked class="accent-amber-500 w-4 h-4" />
+        </label>
+        <label class="flex items-center justify-between text-xs font-semibold cursor-pointer">
+          <span>Smooth Camera View Transitions</span>
+          <input id="gfx-cam-anim" type="checkbox" checked class="accent-amber-500 w-4 h-4" />
+        </label>
+      </div>
+
+      <!-- Dealing & Animation Speed -->
+      <div class="mt-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+        <label class="block font-mono text-[10px] uppercase tracking-wider text-stone-400 mb-1.5">Dealing &amp; Animation Speed</label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-speed="relaxed" class="anim-speed-btn py-1.5 rounded-lg bg-white/10 text-xs font-semibold text-stone-300">Relaxed</button>
+          <button data-speed="standard" class="anim-speed-btn py-1.5 rounded-lg bg-amber-500 text-stone-950 text-xs font-bold">Standard</button>
+          <button data-speed="turbo" class="anim-speed-btn py-1.5 rounded-lg bg-white/10 text-stone-300 text-xs font-semibold">Turbo</button>
+        </div>
+      </div>
+
+      <!-- Felt Color Theme -->
+      <div class="mt-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+        <label class="block font-mono text-[10px] uppercase tracking-wider text-stone-400 mb-2">Table Felt Theme</label>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button data-felt="emerald" class="felt-btn py-2 rounded-xl bg-emerald-800/80 border-2 border-amber-400 text-xs font-bold text-white">Emerald</button>
+          <button data-felt="crimson" class="felt-btn py-2 rounded-xl bg-rose-900/80 border border-white/15 text-xs font-bold text-white">Crimson</button>
+          <button data-felt="midnight" class="felt-btn py-2 rounded-xl bg-indigo-950 border border-white/15 text-xs font-bold text-white">Midnight</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 pt-3 border-t border-white/10 font-mono text-[10px] text-stone-400 flex items-center justify-between">
+      <span>FPS: <strong id="gfx-fps" class="text-emerald-400">60</strong></span>
+      <span>Changes apply live</span>
+    </div>
+  </div>
+
+  <!-- RULES & POKER HAND RANKINGS MODAL -->
+  <div id="rules-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+    <div class="glass-panel w-full max-w-2xl max-h-[85vh] overflow-y-auto thin-scrollbar rounded-3xl p-6 bg-stone-950/95 border border-amber-400/40 shadow-2xl text-stone-100">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div>
+          <span class="font-mono text-[10px] uppercase tracking-widest text-amber-400">TEXAS HOLD'EM GUIDE</span>
+          <h2 class="font-display font-bold text-2xl text-white">Rules &amp; Hand Rankings</h2>
+        </div>
+        <button id="btn-close-rules" class="p-2 rounded-xl bg-white/10 hover:bg-rose-500/25 text-stone-300">✕</button>
+      </div>
+
+      <div class="mt-4 space-y-3 text-xs text-stone-300 leading-relaxed">
+        <p><strong class="text-amber-300">1. Blinds &amp; Dealing:</strong> Before each hand, the seat left of the <span class="text-amber-300 font-semibold">Dealer (D)</span> posts the Small Blind ($10) and the next seat posts the Big Blind ($20). Every player receives 2 private hole cards.</p>
+        <p><strong class="text-amber-300">2. Betting Streets:</strong> Four rounds of betting occur—<strong>Pre-Flop</strong>, <strong>Flop</strong> (3 shared cards), <strong>Turn</strong> (4th card), and <strong>River</strong> (5th card). You may <em>Fold</em>, <em>Check</em> (when no extra bet is required), <em>Call</em>, or <em>Bet/Raise</em>.</p>
+        <p><strong class="text-amber-300">3. Showdown:</strong> Remaining players form the strongest 5-card poker hand using any combination of their 2 hole cards and the 5 community cards. Ties split the pot evenly.</p>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">1. Royal Flush</span> — A K Q J 10 suited</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">2. Straight Flush</span> — 5 sequential suited cards</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">3. Four of a Kind</span> — 4 cards of equal rank</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">4. Full House</span> — 3 of a kind + a pair</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">5. Flush</span> — Any 5 cards of the same suit</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">6. Straight</span> — 5 sequential mixed suits</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">7. Three of a Kind</span> — 3 cards of equal rank</div>
+        <div class="p-2.5 rounded-xl bg-white/5 border border-white/10"><span class="font-mono text-amber-300 font-bold">8. Two Pair</span> — Two separate pairs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MAIN 3D POKER PARLOR & TEXAS HOLD'EM ENGINE
+       ========================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      /**
+       * ------------------------------------------------------------------------
+       * 1. SYNTHESIZED WEB AUDIO SOUND EFFECTS (NO EXTERNAL AUDIO FILES)
+       * ------------------------------------------------------------------------
+       */
+      const SFX = (() => {
+        let ctx = null;
+        let enabled = true;
+
+        function ensureCtx() {
+          if (!enabled) return null;
+          if (!ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) ctx = new AudioCtx();
+          }
+          if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+          }
+          return ctx;
+        }
+
+        function playTone(freq, endFreq, duration, type = 'triangle', gainPeak = 0.08, delay = 0) {
+          const c = ensureCtx();
+          if (!c) return;
+          const now = c.currentTime + delay;
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), now + duration);
+
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.linearRampToValueAtTime(gainPeak, now + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+          osc.connect(gain);
+          gain.connect(c.destination);
+          osc.start(now);
+          osc.stop(now + duration + 0.02);
+        }
+
+        return {
+          setEnabled(v) { enabled = v; },
+          isEnabled() { return enabled; },
+          cardFlick() {
+            playTone(520, 190, 0.07, 'triangle', 0.07);
+          },
+          chipClink() {
+            playTone(2150, 2680, 0.06, 'sine', 0.06, 0);
+            playTone(2680, 3120, 0.07, 'sine', 0.05, 0.035);
+          },
+          checkTap() {
+            playTone(185, 110, 0.08, 'sine', 0.11);
+          },
+          foldSwipe() {
+            playTone(320, 140, 0.11, 'sawtooth', 0.035);
+          },
+          winChime() {
+            playTone(523.25, 523.25, 0.16, 'triangle', 0.09, 0);
+            playTone(659.25, 659.25, 0.16, 'triangle', 0.09, 0.11);
+            playTone(783.99, 1046.5, 0.32, 'triangle', 0.11, 0.22);
+          }
+        };
+      })();
+
+      /**
+       * ------------------------------------------------------------------------
+       * 2. PROCEDURAL TEXTURES FOR PARQUET, FELT, CARDS & CHIPS
+       * ------------------------------------------------------------------------
+       */
+      function createFeltTexture(baseHex, lineHex) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = baseHex;
+        ctx.fillRect(0, 0, 1024, 1024);
+
+        // Subtle woven baize micro-grain
+        for (let i = 0; i < 16000; i++) {
+          const x = Math.random() * 1024;
+          const y = Math.random() * 1024;
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.04)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+
+        // Betting line oval & Koops Games subtle watermark
+        ctx.strokeStyle = lineHex;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(512, 512, 310, 200, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.18)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(512, 512, 330, 218, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.font = 'bold 34px "Fraunces", serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('KOOPS PARLOR · TEXAS HOLD\'EM', 512, 650);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 8;
+        return tex;
+      }
+
+      function createParquetTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const tile = 64;
+        for (let y = 0; y < 512; y += tile) {
+          for (let x = 0; x < 512; x += tile) {
+            const alt = ((x / tile + y / tile) % 2) === 0;
+            ctx.fillStyle = alt ? '#241812' : '#1b120d';
+            ctx.fillRect(x, y, tile, tile);
+            ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+            ctx.strokeRect(x, y, tile, tile);
+            // Wood grain lines
+            ctx.strokeStyle = 'rgba(255, 200, 140, 0.04)';
+            for (let g = 8; g < tile; g += 10) {
+              ctx.beginPath();
+              if (alt) {
+                ctx.moveTo(x + g, y);
+                ctx.lineTo(x + g, y + tile);
+              } else {
+                ctx.moveTo(x, y + g);
+                ctx.lineTo(x + tile, y + g);
+              }
+              ctx.stroke();
+            }
+          }
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(9, 9);
+        return tex;
+      }
+
+      function createCardBackTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#fefce8';
+        ctx.fillRect(0, 0, 256, 360);
+
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(14, 14, 228, 332);
+
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(22, 22, 212, 316);
+
+        // Diamond lattice
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
+        ctx.lineWidth = 1.5;
+        for (let i = -360; i < 600; i += 24) {
+          ctx.beginPath();
+          ctx.moveTo(i, 24);
+          ctx.lineTo(i + 320, 336);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(i + 320, 24);
+          ctx.lineTo(i, 336);
+          ctx.stroke();
+        }
+
+        // Center Emblem
+        ctx.fillStyle = '#1c1917';
+        ctx.beginPath();
+        ctx.arc(128, 180, 36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 34px "Fraunces", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('K', 128, 182);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 4;
+        return tex;
+      }
+
+      const cardFaceCache = new Map();
+      function getCardFaceTexture(rank, suit) {
+        const key = `${rank}-${suit}`;
+        if (cardFaceCache.has(key)) return cardFaceCache.get(key);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#fffdf7';
+        ctx.fillRect(0, 0, 256, 360);
+
+        ctx.strokeStyle = '#d6d3d1';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(6, 6, 244, 348);
+
+        const isRed = suit === '♥' || suit === '♦';
+        const color = isRed ? '#dc2626' : '#18181b';
+        ctx.fillStyle = color;
+
+        // Top-left index
+        ctx.font = 'bold 38px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(rank, 20, 16);
+        ctx.font = '32px sans-serif';
+        ctx.fillText(suit, 22, 56);
+
+        // Bottom-right inverted index
+        ctx.save();
+        ctx.translate(236, 344);
+        ctx.rotate(Math.PI);
+        ctx.font = 'bold 38px "JetBrains Mono", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(rank, 0, 0);
+        ctx.font = '32px sans-serif';
+        ctx.fillText(suit, 2, 40);
+        ctx.restore();
+
+        // Center large suit pip
+        ctx.font = '112px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(suit, 128, 184);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 4;
+        cardFaceCache.set(key, tex);
+        return tex;
+      }
+
+      const cardBackTex = createCardBackTexture();
+
+      /**
+       * ------------------------------------------------------------------------
+       * 3. THREE.JS SCENE, PARLOR ARCHITECTURE, TABLE, CHIPS & CARDS
+       * ------------------------------------------------------------------------
+       */
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#090b0f');
+      scene.fog = new THREE.FogExp2('#090b0f', 0.022);
+
+      const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.1, 140);
+      camera.position.set(0, 8.6, 11.2);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI * 0.46;
+      controls.minDistance = 4.2;
+      controls.maxDistance = 20;
+      controls.target.set(0, 1.1, 0);
+
+      // Lighting Rig
+      const ambientLight = new THREE.HemisphereLight('#fff7ed', '#1c1917', 0.65);
+      scene.add(ambientLight);
+
+      const mainSpot = new THREE.SpotLight('#ffedd5', 2.4, 28, Math.PI * 0.34, 0.55, 1.2);
+      mainSpot.position.set(0, 7.2, 0);
+      mainSpot.castShadow = true;
+      mainSpot.shadow.mapSize.width = 2048;
+      mainSpot.shadow.mapSize.height = 2048;
+      mainSpot.shadow.camera.near = 1;
+      mainSpot.shadow.camera.far = 20;
+      mainSpot.shadow.bias = -0.0005;
+      scene.add(mainSpot);
+      scene.add(mainSpot.target);
+
+      const rimLight = new THREE.DirectionalLight('#fbbf24', 0.75);
+      rimLight.position.set(-7, 6, -7);
+      scene.add(rimLight);
+
+      // Parlor Room: Parquet Floor, Brass Trim, Pendant Lamp & Plush Velvet Chairs
+      const floorMat = new THREE.MeshStandardMaterial({
+        map: createParquetTexture(),
+        roughness: 0.42,
+        metalness: 0.08
+      });
+      const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), floorMat);
+      floorMesh.rotation.x = -Math.PI / 2;
+      floorMesh.receiveShadow = true;
+      scene.add(floorMesh);
+
+      // Brass Inlay Ring on Parlor Floor
+      const floorBrassRing = new THREE.Mesh(
+        new THREE.RingGeometry(6.4, 6.55, 64),
+        new THREE.MeshStandardMaterial({ color: '#d97706', metalness: 0.8, roughness: 0.25, side: THREE.DoubleSide })
+      );
+      floorBrassRing.rotation.x = -Math.PI / 2;
+      floorBrassRing.position.y = 0.01;
+      scene.add(floorBrassRing);
+
+      // Overhead Casino Pendant Lamp
+      const lampCord = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 3.2, 8),
+        new THREE.MeshStandardMaterial({ color: '#18181b', metalness: 0.7, roughness: 0.3 })
+      );
+      lampCord.position.set(0, 8.8, 0);
+      scene.add(lampCord);
+
+      const lampShade = new THREE.Mesh(
+        new THREE.ConeGeometry(1.55, 0.95, 24, 1, true),
+        new THREE.MeshStandardMaterial({
+          color: '#78350f',
+          emissive: '#f59e0b',
+          emissiveIntensity: 0.35,
+          metalness: 0.65,
+          roughness: 0.25,
+          side: THREE.DoubleSide
+        })
+      );
+      lampShade.position.set(0, 7.1, 0);
+      scene.add(lampShade);
+
+      // Octagonal Mahogany & Brass Poker Table
+      const FELT_THEMES = {
+        emerald: { felt: '#0b5d3b', line: 'rgba(250, 204, 21, 0.38)' },
+        crimson: { felt: '#7f1d2d', line: 'rgba(253, 224, 71, 0.38)' },
+        midnight: { felt: '#12264d', line: 'rgba(125, 211, 252, 0.38)' }
+      };
+
+      const feltMat = new THREE.MeshStandardMaterial({
+        map: createFeltTexture(FELT_THEMES.emerald.felt, FELT_THEMES.emerald.line),
+        roughness: 0.85,
+        metalness: 0.02
+      });
+
+      const mahoganyMat = new THREE.MeshStandardMaterial({
+        color: '#4a1d12',
+        roughness: 0.28,
+        metalness: 0.15
+      });
+
+      const brassMat = new THREE.MeshStandardMaterial({
+        color: '#eab308',
+        roughness: 0.22,
+        metalness: 0.85
+      });
+
+      // Pedestal Base
+      const tablePedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.75, 1.15, 24), mahoganyMat);
+      tablePedestal.position.y = 0.58;
+      tablePedestal.castShadow = true;
+      tablePedestal.receiveShadow = true;
+      scene.add(tablePedestal);
+
+      // Octagonal Felt Surface
+      const TABLE_Y = 1.18;
+      const feltSurface = new THREE.Mesh(new THREE.CylinderGeometry(4.15, 4.15, 0.14, 8), feltMat);
+      feltSurface.position.y = TABLE_Y;
+      feltSurface.receiveShadow = true;
+      scene.add(feltSurface);
+
+      // Octagonal Mahogany Rail Collar around Felt
+      const railGroup = new THREE.Group();
+      railGroup.position.y = TABLE_Y + 0.08;
+      const sides = 8;
+      const radius = 4.25;
+      for (let i = 0; i < sides; i++) {
+        const a1 = (i / sides) * Math.PI * 2 + Math.PI / 8;
+        const a2 = ((i + 1) / sides) * Math.PI * 2 + Math.PI / 8;
+        const p1 = new THREE.Vector3(Math.cos(a1) * radius, 0, Math.sin(a1) * radius);
+        const p2 = new THREE.Vector3(Math.cos(a2) * radius, 0, Math.sin(a2) * radius);
+        const mid = p1.clone().add(p2).multiplyScalar(0.5);
+        const len = p1.distanceTo(p2);
+        const seg = new THREE.Mesh(new THREE.BoxGeometry(len + 0.08, 0.18, 0.52), mahoganyMat);
+        seg.position.copy(mid);
+        seg.lookAt(mid.clone().add(new THREE.Vector3(-mid.z, 0, mid.x)));
+        seg.castShadow = true;
+        seg.receiveShadow = true;
+        railGroup.add(seg);
+
+        // Brass corner accent
+        const corner = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.21, 12), brassMat);
+        corner.position.copy(p1);
+        railGroup.add(corner);
+      }
+      scene.add(railGroup);
+
+      // Use the Koops local profile name for the human seat when one is active.
+      const humanSeatName = (() => {
+        try {
+          const activeUsername = localStorage.getItem('koops.active-profile.v1');
+          const profiles = JSON.parse(localStorage.getItem('koops.local-profiles.v1') || '{}');
+          const profile = activeUsername ? profiles[activeUsername] : null;
+          return String(profile?.displayName || profile?.username || 'You').trim().slice(0, 24) || 'You';
+        } catch {
+          return 'You';
+        }
+      })();
+
+      // 4 Seat Positions (Seat 0 = Human Player at Front, Seats 1-3 = Smart AI Opponents)
+      const SEAT_CONFIGS = [
+        { id: 0, name: humanSeatName, personality: 'Human', x: 0, z: 4.95, angle: 0, ringColor: '#fbbf24' },
+        { id: 1, name: 'Evelyn (Tight)', personality: 'cautious', x: -4.95, z: 0.6, angle: Math.PI * 0.42, ringColor: '#38bdf8' },
+        { id: 2, name: 'Marcus (Shark)', personality: 'aggressive', x: 0, z: -4.95, angle: Math.PI, ringColor: '#f43f5e' },
+        { id: 3, name: 'Soren (Pro)', personality: 'balanced', x: 4.95, z: 0.6, angle: -Math.PI * 0.42, ringColor: '#34d399' }
+      ];
+
+      const velvetMat = new THREE.MeshStandardMaterial({ color: '#881337', roughness: 0.78 });
+      const seatRings = [];
+
+      SEAT_CONFIGS.forEach((s) => {
+        // Velvet Parlor Chair
+        const chair = new THREE.Group();
+        chair.position.set(s.x, 0, s.z);
+        chair.rotation.y = s.angle;
+
+        const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.72, 0.22, 20), velvetMat);
+        cushion.position.y = 0.72;
+        cushion.castShadow = true;
+        chair.add(cushion);
+
+        const backrest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.85, 0.22), velvetMat);
+        backrest.position.set(0, 1.2, 0.58);
+        backrest.castShadow = true;
+        chair.add(backrest);
+
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.52, 0.62, 16), mahoganyMat);
+        leg.position.y = 0.32;
+        chair.add(leg);
+
+        scene.add(chair);
+
+        // Glowing Turn Indicator Ring on Felt Edge
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.58, 0.74, 32),
+          new THREE.MeshBasicMaterial({ color: s.ringColor, side: THREE.DoubleSide, transparent: true, opacity: 0.22 })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(s.x * 0.72, TABLE_Y + 0.08, s.z * 0.72);
+        scene.add(ring);
+        seatRings.push(ring);
+      });
+
+      // Dealer Button 3D Puck
+      const dealerPuck = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.24, 0.24, 0.07, 24),
+        new THREE.MeshStandardMaterial({ color: '#fef9c3', emissive: '#fbbf24', emissiveIntensity: 0.35, roughness: 0.25 })
+      );
+      dealerPuck.position.set(0.9, TABLE_Y + 0.11, 2.2);
+      scene.add(dealerPuck);
+
+      // 3D Card Factory & Active Animated Meshes
+      const cardGeo = new THREE.BoxGeometry(0.56, 0.014, 0.8);
+      const animatedTweens = [];
+      const boardCardMeshes = [];
+      const playerCardMeshes = [[], [], [], []];
+      const potChipMeshes = [];
+
+      function createCardMesh(cardObj, faceUp = false) {
+        const faceTex = getCardFaceTexture(cardObj.rank, cardObj.suit);
+        const mats = [
+          new THREE.MeshStandardMaterial({ color: '#f5f5f4' }),
+          new THREE.MeshStandardMaterial({ color: '#f5f5f4' }),
+          new THREE.MeshStandardMaterial({ color: faceUp ? '#fff' : '#7f1d1d', map: faceUp ? faceTex : cardBackTex, roughness: 0.35 }),
+          new THREE.MeshStandardMaterial({ color: faceUp ? '#7f1d1d' : '#fff', map: faceUp ? cardBackTex : faceTex, roughness: 0.35 }),
+          new THREE.MeshStandardMaterial({ color: '#f5f5f4' }),
+          new THREE.MeshStandardMaterial({ color: '#f5f5f4' })
+        ];
+        const mesh = new THREE.Mesh(cardGeo, mats);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData = { cardObj, faceUp };
+        scene.add(mesh);
+        return mesh;
+      }
+
+      function setCardFaceUp(mesh, faceUp) {
+        if (!mesh || mesh.userData.faceUp === faceUp) return;
+        mesh.userData.faceUp = faceUp;
+        const faceTex = getCardFaceTexture(mesh.userData.cardObj.rank, mesh.userData.cardObj.suit);
+        mesh.material[2].map = faceUp ? faceTex : cardBackTex;
+        mesh.material[2].color.set(faceUp ? '#ffffff' : '#7f1d1d');
+        mesh.material[2].needsUpdate = true;
+        mesh.material[3].map = faceUp ? cardBackTex : faceTex;
+        mesh.material[3].color.set(faceUp ? '#7f1d1d' : '#ffffff');
+        mesh.material[3].needsUpdate = true;
+      }
+
+      function addTween({ mesh, toPos, toRot, arcHeight = 0, duration = 0.35, onComplete = null }) {
+        const fromPos = mesh.position.clone();
+        const fromRot = new THREE.Euler(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z);
+        animatedTweens.push({
+          mesh,
+          fromPos,
+          toPos: toPos.clone(),
+          fromRot,
+          toRot: toRot ? new THREE.Euler(toRot.x, toRot.y, toRot.z) : fromRot.clone(),
+          arcHeight,
+          elapsed: 0,
+          duration: Math.max(0.08, duration * getSpeedMultiplier()),
+          onComplete
+        });
+      }
+
+      function rebuildPotChips3D(potAmount) {
+        potChipMeshes.forEach((m) => scene.remove(m));
+        potChipMeshes.length = 0;
+        if (potAmount <= 0) return;
+
+        const denoms = [
+          { val: 500, color: '#eab308' },
+          { val: 100, color: '#18181b' },
+          { val: 25, color: '#16a34a' },
+          { val: 5, color: '#dc2626' }
+        ];
+
+        let rem = Math.min(potAmount, 1200);
+        let stackIdx = 0;
+        denoms.forEach((d) => {
+          const count = Math.min(8, Math.floor(rem / d.val));
+          rem -= count * d.val;
+          for (let i = 0; i < count; i++) {
+            const chip = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.18, 0.18, 0.045, 20),
+              new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.3, metalness: 0.15 })
+            );
+            const angle = stackIdx * 1.1;
+            const rad = stackIdx > 10 ? 0.35 : 0;
+            chip.position.set(
+              Math.cos(angle) * rad,
+              TABLE_Y + 0.1 + (stackIdx % 11) * 0.046,
+              -0.95 + Math.sin(angle) * rad
+            );
+            chip.castShadow = true;
+            scene.add(chip);
+            potChipMeshes.push(chip);
+            stackIdx++;
+          }
+        });
+      }
+
+      /**
+       * ------------------------------------------------------------------------
+       * 4. TEXAS HOLD'EM DECK & 5-CARD HAND EVALUATOR
+       * ------------------------------------------------------------------------
+       */
+      const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+      const SUITS = ['♠', '♥', '♦', '♣'];
+      const RANK_VAL = Object.fromEntries(RANKS.map((r, i) => [r, i + 2]));
+
+      function createShuffledDeck() {
+        const deck = [];
+        for (const s of SUITS) {
+          for (const r of RANKS) {
+            deck.push({ rank: r, suit: s, val: RANK_VAL[r] });
+          }
+        }
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+      }
+
+      function scoreFiveCards(cards) {
+        const vals = cards.map((c) => c.val).sort((a, b) => b - a);
+        const suits = cards.map((c) => c.suit);
+        const isFlush = suits.every((s) => s === suits[0]);
+
+        // Check straight (including wheel A-2-3-4-5)
+        let isStraight = false;
+        let straightHigh = vals[0];
+        const uniqDesc = [...new Set(vals)];
+        if (uniqDesc.length === 5 && uniqDesc[0] - uniqDesc[4] === 4) {
+          isStraight = true;
+          straightHigh = uniqDesc[0];
+        } else if (uniqDesc.length === 5 && uniqDesc[0] === 14 && uniqDesc[1] === 5 && uniqDesc[4] === 2) {
+          isStraight = true;
+          straightHigh = 5;
+        }
+
+        const counts = new Map();
+        vals.forEach((v) => counts.set(v, (counts.get(v) || 0) + 1));
+        const groups = [...counts.entries()].sort((a, b) => (b[1] - a[1]) || (b[0] - a[0]));
+
+        if (isFlush && isStraight && straightHigh === 14) {
+          return { rank: 9, name: 'Royal Flush', tiebreak: [14] };
+        }
+        if (isFlush && isStraight) {
+          return { rank: 8, name: 'Straight Flush', tiebreak: [straightHigh] };
+        }
+        if (groups[0][1] === 4) {
+          return { rank: 7, name: 'Four of a Kind', tiebreak: [groups[0][0], groups[1][0]] };
+        }
+        if (groups[0][1] === 3 && groups[1] && groups[1][1] === 2) {
+          return { rank: 6, name: 'Full House', tiebreak: [groups[0][0], groups[1][0]] };
+        }
+        if (isFlush) {
+          return { rank: 5, name: 'Flush', tiebreak: vals };
+        }
+        if (isStraight) {
+          return { rank: 4, name: 'Straight', tiebreak: [straightHigh] };
+        }
+        if (groups[0][1] === 3) {
+          const kickers = groups.slice(1).map((g) => g[0]);
+          return { rank: 3, name: 'Three of a Kind', tiebreak: [groups[0][0], ...kickers] };
+        }
+        if (groups[0][1] === 2 && groups[1] && groups[1][1] === 2) {
+          const pairHigh = Math.max(groups[0][0], groups[1][0]);
+          const pairLow = Math.min(groups[0][0], groups[1][0]);
+          const kicker = groups[2][0];
+          return { rank: 2, name: 'Two Pair', tiebreak: [pairHigh, pairLow, kicker] };
+        }
+        if (groups[0][1] === 2) {
+          const kickers = groups.slice(1).map((g) => g[0]);
+          return { rank: 1, name: 'One Pair', tiebreak: [groups[0][0], ...kickers] };
+        }
+        return { rank: 0, name: 'High Card', tiebreak: vals };
+      }
+
+      function compareScores(a, b) {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        const len = Math.max(a.tiebreak.length, b.tiebreak.length);
+        for (let i = 0; i < len; i++) {
+          const av = a.tiebreak[i] || 0;
+          const bv = b.tiebreak[i] || 0;
+          if (av !== bv) return av - bv;
+        }
+        return 0;
+      }
+
+      function evaluateBestHoldemHand(holeCards, boardCards) {
+        const pool = [...holeCards, ...boardCards];
+        if (pool.length < 5) {
+          const high = Math.max(...pool.map((c) => c.val), 0);
+          return { rank: 0, name: `${RANKS[high - 2] || 'High'} High`, tiebreak: [high] };
+        }
+        let best = null;
+        const n = pool.length;
+        for (let a = 0; a < n - 4; a++) {
+          for (let b = a + 1; b < n - 3; b++) {
+            for (let c = b + 1; c < n - 2; c++) {
+              for (let d = c + 1; d < n - 1; d++) {
+                for (let e = d + 1; e < n; e++) {
+                  const candidate = scoreFiveCards([pool[a], pool[b], pool[c], pool[d], pool[e]]);
+                  if (!best || compareScores(candidate, best) > 0) {
+                    best = candidate;
+                  }
+                }
+              }
+            }
+          }
+        }
+        return best;
+      }
+
+      /**
+       * ------------------------------------------------------------------------
+       * 5. TEXAS HOLD'EM GAME LOOP, BLINDS, AI & SHOWDOWN
+       * ------------------------------------------------------------------------
+       */
+      const SMALL_BLIND = 10;
+      const BIG_BLIND = 20;
+
+      const game = {
+        handNumber: 0,
+        dealerIdx: 0,
+        street: 'PRE-FLOP',
+        deck: [],
+        board: [],
+        pot: 0,
+        currentBet: 0,
+        activeTurn: -1,
+        players: SEAT_CONFIGS.map((cfg) => ({
+          ...cfg,
+          chips: 1000,
+          hand: [],
+          bet: 0,
+          folded: false,
+          allIn: false,
+          actedThisStreet: false,
+          lastAction: ''
+        })),
+        phaseLocked: false
+      };
+
+      function showToast(msg) {
+        const el = document.getElementById('event-toast');
+        document.getElementById('event-toast-text').textContent = msg;
+        el.classList.remove('opacity-0', '-translate-y-2');
+        setTimeout(() => el.classList.add('opacity-0', '-translate-y-2'), 2200);
+      }
+
+      function clearTableCards() {
+        boardCardMeshes.forEach((m) => scene.remove(m));
+        boardCardMeshes.length = 0;
+        playerCardMeshes.forEach((arr) => {
+          arr.forEach((m) => scene.remove(m));
+          arr.length = 0;
+        });
+      }
+
+      function postBlind(playerIdx, amount) {
+        const p = game.players[playerIdx];
+        const pay = Math.min(p.chips, amount);
+        p.chips -= pay;
+        p.bet += pay;
+        game.pot += pay;
+        if (p.chips === 0) p.allIn = true;
+      }
+
+      function nextActiveSeat(fromIdx) {
+        for (let step = 1; step <= 4; step++) {
+          const idx = (fromIdx + step) % 4;
+          const p = game.players[idx];
+          if (!p.folded && !p.allIn && p.chips > 0) return idx;
+        }
+        return -1;
+      }
+
+      function countContenders() {
+        return game.players.filter((p) => !p.folded).length;
+      }
+
+      function startNewHand() {
+        document.getElementById('hand-result-banner').classList.add('hidden');
+        clearTableCards();
+
+        // Ensure players with 0 chips get a courtesy rebuy if needed
+        game.players.forEach((p) => {
+          if (p.chips <= 0) p.chips = 1000;
+          p.hand = [];
+          p.bet = 0;
+          p.folded = false;
+          p.allIn = false;
+          p.actedThisStreet = false;
+          p.lastAction = '';
+        });
+
+        game.handNumber += 1;
+        game.dealerIdx = (game.dealerIdx + 1) % 4;
+        game.street = 'PRE-FLOP';
+        game.deck = createShuffledDeck();
+        game.board = [];
+        game.pot = 0;
+        game.currentBet = BIG_BLIND;
+        game.phaseLocked = true;
+
+        // Move 3D Dealer Puck near Dealer Seat
+        const dSeat = SEAT_CONFIGS[game.dealerIdx];
+        dealerPuck.position.set(dSeat.x * 0.56, TABLE_Y + 0.11, dSeat.z * 0.56);
+
+        // Post Small & Big Blinds
+        const sbIdx = (game.dealerIdx + 1) % 4;
+        const bbIdx = (game.dealerIdx + 2) % 4;
+        postBlind(sbIdx, SMALL_BLIND);
+        postBlind(bbIdx, BIG_BLIND);
+        game.players[sbIdx].lastAction = `SB $${SMALL_BLIND}`;
+        game.players[bbIdx].lastAction = `BB $${BIG_BLIND}`;
+        rebuildPotChips3D(game.pot);
+        SFX.chipClink();
+
+        // Deal 2 hole cards to each player with 3D arc animation
+        let dealDelay = 0;
+        for (let round = 0; round < 2; round++) {
+          for (let i = 0; i < 4; i++) {
+            const pIdx = (game.dealerIdx + 1 + i) % 4;
+            const card = game.deck.pop();
+            game.players[pIdx].hand.push(card);
+
+            const isHuman = pIdx === 0;
+            const mesh = createCardMesh(card, isHuman);
+            mesh.position.set(0, TABLE_Y + 0.25, -0.3);
+            playerCardMeshes[pIdx].push(mesh);
+
+            const seat = SEAT_CONFIGS[pIdx];
+            const offsetX = (round === 0 ? -0.32 : 0.32) * Math.cos(seat.angle);
+            const offsetZ = (round === 0 ? -0.32 : 0.32) * Math.sin(seat.angle);
+            const targetPos = new THREE.Vector3(
+              seat.x * 0.64 + offsetX,
+              TABLE_Y + 0.09 + round * 0.015,
+              seat.z * 0.64 + offsetZ
+            );
+
+            setTimeout(() => {
+              SFX.cardFlick();
+              addTween({
+                mesh,
+                toPos: targetPos,
+                toRot: { x: 0, y: seat.angle, z: 0 },
+                arcHeight: 1.1,
+                duration: 0.32
+              });
+            }, dealDelay);
+            dealDelay += 95;
+          }
+        }
+
+        setTimeout(() => {
+          game.phaseLocked = false;
+          game.activeTurn = nextActiveSeat(bbIdx);
+          updateHUD();
+          showToast(`Hand #${game.handNumber} · Pre-Flop`);
+          runTurnLoop();
+        }, dealDelay + 240);
+
+        updateHUD();
+      }
+
+      function dealCommunityCards(count, streetName) {
+        game.phaseLocked = true;
+        game.street = streetName;
+        game.currentBet = 0;
+        game.players.forEach((p) => {
+          p.bet = 0;
+          p.actedThisStreet = false;
+          if (!p.folded) p.lastAction = '';
+        });
+
+        let delay = 0;
+        for (let i = 0; i < count; i++) {
+          const card = game.deck.pop();
+          game.board.push(card);
+          const slotIdx = game.board.length - 1;
+          const mesh = createCardMesh(card, true);
+          mesh.position.set(0, TABLE_Y + 0.35, -0.3);
+          boardCardMeshes.push(mesh);
+
+          const targetPos = new THREE.Vector3((slotIdx - 2) * 0.68, TABLE_Y + 0.09, 0.15);
+          setTimeout(() => {
+            SFX.cardFlick();
+            addTween({
+              mesh,
+              toPos: targetPos,
+              toRot: { x: 0, y: 0, z: 0 },
+              arcHeight: 1.25,
+              duration: 0.38
+            });
+          }, delay);
+          delay += 140;
+        }
+
+        setTimeout(() => {
+          game.phaseLocked = false;
+          const firstToAct = nextActiveSeat(game.dealerIdx);
+          if (firstToAct === -1) {
+            advanceStreetOrShowdown();
+          } else {
+            game.activeTurn = firstToAct;
+            updateHUD();
+            showToast(`${streetName} Dealt`);
+            runTurnLoop();
+          }
+        }, delay + 260);
+
+        updateHUD();
+      }
+
+      function isBettingRoundComplete() {
+        const activePlayers = game.players.filter((p) => !p.folded && !p.allIn);
+        if (activePlayers.length <= 1) {
+          const anyActed = activePlayers.every((p) => p.actedThisStreet);
+          const allMatched = activePlayers.every((p) => p.bet === game.currentBet);
+          return anyActed && allMatched;
+        }
+        return activePlayers.every((p) => p.actedThisStreet && p.bet === game.currentBet);
+      }
+
+      function applyPlayerAction(playerIdx, actionType, targetRaiseTotal = 0) {
+        const p = game.players[playerIdx];
+        if (!p || p.folded || p.allIn) return;
+
+        p.actedThisStreet = true;
+
+        if (actionType === 'fold') {
+          p.folded = true;
+          p.lastAction = 'FOLD';
+          SFX.foldSwipe();
+          playerCardMeshes[playerIdx].forEach((m) => {
+            addTween({
+              mesh: m,
+              toPos: m.position.clone().lerp(new THREE.Vector3(0, TABLE_Y + 0.09, 0), 0.35),
+              toRot: { x: 0, y: m.rotation.y + 0.3, z: 0 },
+              duration: 0.25
+            });
+          });
+        } else if (actionType === 'check') {
+          p.lastAction = 'CHECK';
+          SFX.checkTap();
+        } else if (actionType === 'call') {
+          const toCall = Math.max(0, game.currentBet - p.bet);
+          const paid = Math.min(p.chips, toCall);
+          p.chips -= paid;
+          p.bet += paid;
+          game.pot += paid;
+          if (p.chips === 0) p.allIn = true;
+          p.lastAction = p.allIn ? 'ALL-IN' : `CALL $${paid}`;
+          SFX.chipClink();
+          rebuildPotChips3D(game.pot);
+        } else if (actionType === 'bet' || actionType === 'raise') {
+          const desiredTotal = Math.max(game.currentBet + BIG_BLIND, targetRaiseTotal);
+          const maxPossibleTotal = p.bet + p.chips;
+          const finalTotal = Math.min(desiredTotal, maxPossibleTotal);
+          const added = Math.max(0, finalTotal - p.bet);
+          p.chips -= added;
+          p.bet += added;
+          game.pot += added;
+          if (p.bet > game.currentBet) {
+            game.currentBet = p.bet;
+            // Re-open action for other active players
+            game.players.forEach((other, idx) => {
+              if (idx !== playerIdx && !other.folded && !other.allIn) {
+                other.actedThisStreet = false;
+              }
+            });
+          }
+          if (p.chips === 0) p.allIn = true;
+          p.lastAction = p.allIn ? `ALL-IN $${p.bet}` : `${actionType.toUpperCase()} $${p.bet}`;
+          SFX.chipClink();
+          rebuildPotChips3D(game.pot);
+        }
+
+        updateHUD();
+
+        if (countContenders() === 1) {
+          concludeByFold();
+          return;
+        }
+
+        if (isBettingRoundComplete()) {
+          advanceStreetOrShowdown();
+        } else {
+          game.activeTurn = nextActiveSeat(playerIdx);
+          updateHUD();
+          runTurnLoop();
+        }
+      }
+
+      function advanceStreetOrShowdown() {
+        if (game.street === 'PRE-FLOP') {
+          dealCommunityCards(3, 'FLOP');
+        } else if (game.street === 'FLOP') {
+          dealCommunityCards(1, 'TURN');
+        } else if (game.street === 'TURN') {
+          dealCommunityCards(1, 'RIVER');
+        } else {
+          runShowdown();
+        }
+      }
+
+      function concludeByFold() {
+        game.activeTurn = -1;
+        game.phaseLocked = true;
+        const winner = game.players.find((p) => !p.folded);
+        const wonAmount = game.pot;
+        winner.chips += wonAmount;
+        game.pot = 0;
+        rebuildPotChips3D(0);
+        SFX.winChime();
+        showResultBanner(`${winner.name} Wins $${wonAmount}!`, 'All other players folded');
+      }
+
+      function runShowdown() {
+        game.activeTurn = -1;
+        game.phaseLocked = true;
+        game.street = 'SHOWDOWN';
+
+        // Reveal AI hole cards in 3D
+        game.players.forEach((p, idx) => {
+          if (!p.folded) {
+            playerCardMeshes[idx].forEach((m) => setCardFaceUp(m, true));
+          }
+        });
+
+        const contenders = game.players.filter((p) => !p.folded).map((p) => ({
+          player: p,
+          evalScore: evaluateBestHoldemHand(p.hand, game.board)
+        }));
+
+        contenders.sort((a, b) => compareScores(b.evalScore, a.evalScore));
+        const topScore = contenders[0].evalScore;
+        const winners = contenders.filter((c) => compareScores(c.evalScore, topScore) === 0);
+
+        const totalPot = game.pot;
+        const share = Math.floor(totalPot / winners.length);
+        const remainder = totalPot - share * winners.length;
+
+        winners.forEach((w, idx) => {
+          w.player.chips += share + (idx === 0 ? remainder : 0);
+        });
+
+        game.pot = 0;
+        rebuildPotChips3D(0);
+        SFX.winChime();
+
+        if (winners.length === 1) {
+          showResultBanner(
+            `${winners[0].player.name} Wins $${totalPot}!`,
+            `Hand: ${topScore.name}`
+          );
+        } else {
+          const names = winners.map((w) => w.player.name).join(' & ');
+          showResultBanner(
+            `Split Pot! ${names} Win $${totalPot}`,
+            `Tied with ${topScore.name}`
+          );
+        }
+        updateHUD();
+      }
+
+      function showResultBanner(headline, subtext) {
+        document.getElementById('result-headline').textContent = headline;
+        document.getElementById('result-subtext').textContent = subtext;
+        document.getElementById('hand-result-banner').classList.remove('hidden');
+      }
+
+      // Smart AI Decision Engine
+      function computeAIDecision(aiPlayer) {
+        const toCall = Math.max(0, game.currentBet - aiPlayer.bet);
+        const evalHand = evaluateBestHoldemHand(aiPlayer.hand, game.board);
+        const strength = Math.min(1, evalHand.rank / 6 + (aiPlayer.hand.reduce((s, c) => s + c.val, 0) / 36));
+        const r = Math.random();
+
+        if (aiPlayer.personality === 'cautious') {
+          if (toCall === 0) {
+            return strength > 0.72 && r < 0.35 ? { action: 'bet', amount: game.currentBet + BIG_BLIND } : { action: 'check' };
+          }
+          if (toCall > aiPlayer.chips * 0.35 && strength < 0.55) return { action: 'fold' };
+          return strength > 0.25 || toCall <= BIG_BLIND ? { action: 'call' } : { action: 'fold' };
+        }
+
+        if (aiPlayer.personality === 'aggressive') {
+          if (toCall === 0) {
+            return r < 0.62 ? { action: 'bet', amount: game.currentBet + BIG_BLIND * 2 } : { action: 'check' };
+          }
+          if (strength > 0.62 && r < 0.48 && aiPlayer.chips > toCall + BIG_BLIND) {
+            return { action: 'raise', amount: game.currentBet + BIG_BLIND * 2 };
+          }
+          return r < 0.78 || toCall <= BIG_BLIND * 2 ? { action: 'call' } : { action: 'fold' };
+        }
+
+        // Balanced
+        if (toCall === 0) {
+          return strength > 0.62 && r < 0.42 ? { action: 'bet', amount: game.currentBet + BIG_BLIND } : { action: 'check' };
+        }
+        if (strength > 0.75 && r < 0.35) {
+          return { action: 'raise', amount: game.currentBet + BIG_BLIND * 2 };
+        }
+        if (toCall > aiPlayer.chips * 0.5 && strength < 0.45) return { action: 'fold' };
+        return { action: 'call' };
+      }
+
+      function runTurnLoop() {
+        if (game.phaseLocked || game.activeTurn === -1) return;
+        const current = game.players[game.activeTurn];
+        if (!current) return;
+
+        if (current.id === 0) {
+          enableHumanControls(true);
+          return;
+        }
+
+        enableHumanControls(false);
+        const thinkMs = Math.round(520 * getSpeedMultiplier());
+        setTimeout(() => {
+          if (game.phaseLocked || game.activeTurn !== current.id) return;
+          const decision = computeAIDecision(current);
+          applyPlayerAction(current.id, decision.action, decision.amount || 0);
+        }, thinkMs);
+      }
+
+      /**
+       * ------------------------------------------------------------------------
+       * 6. HUD RENDERING & BETTING CONTROLS
+       * ------------------------------------------------------------------------
+       */
+      function renderMiniCardHTML(card, faceUp = true) {
+        if (!card) {
+          return `<div class="w-9 h-12 rounded-lg bg-stone-800 border border-white/15 flex items-center justify-center font-mono text-[10px] text-stone-500">?</div>`;
+        }
+        if (!faceUp) {
+          return `<div class="w-9 h-12 rounded-lg bg-gradient-to-br from-rose-900 to-rose-950 border border-amber-400/50 flex items-center justify-center font-display font-bold text-xs text-amber-300 shadow">K</div>`;
+        }
+        const red = card.suit === '♥' || card.suit === '♦';
+        return `
+          <div class="w-9 h-12 rounded-lg bg-amber-50 text-stone-900 border border-stone-300 shadow flex flex-col items-center justify-between py-0.5 leading-none">
+            <span class="font-mono text-[10px] font-bold ${red ? 'text-red-600' : 'text-stone-900'}">${card.rank}</span>
+            <span class="text-xs ${red ? 'text-red-600' : 'text-stone-900'}">${card.suit}</span>
+          </div>
+        `;
+      }
+
+      function enableHumanControls(enabled) {
+        const foldBtn = document.getElementById('btn-fold');
+        const checkCallBtn = document.getElementById('btn-check-call');
+        const betRaiseBtn = document.getElementById('btn-bet-raise');
+        const slider = document.getElementById('bet-slider');
+
+        foldBtn.disabled = !enabled;
+        checkCallBtn.disabled = !enabled;
+        betRaiseBtn.disabled = !enabled;
+        slider.disabled = !enabled;
+
+        if (!enabled) return;
+
+        const human = game.players[0];
+        const toCall = Math.max(0, game.currentBet - human.bet);
+        checkCallBtn.textContent = toCall === 0 ? 'Check' : `Call $${Math.min(toCall, human.chips)}`;
+
+        const minBetTotal = Math.min(human.bet + human.chips, Math.max(BIG_BLIND, game.currentBet + BIG_BLIND));
+        const maxBetTotal = human.bet + human.chips;
+        slider.min = minBetTotal;
+        slider.max = Math.max(minBetTotal, maxBetTotal);
+        slider.value = Math.min(parseInt(slider.value, 10) || minBetTotal, maxBetTotal);
+        if (parseInt(slider.value, 10) < minBetTotal) slider.value = minBetTotal;
+
+        syncBetSliderLabel();
+      }
+
+      function syncBetSliderLabel() {
+        const slider = document.getElementById('bet-slider');
+        const val = parseInt(slider.value, 10) || BIG_BLIND;
+        document.getElementById('bet-slider-readout').textContent = `$${val}`;
+        const label = game.currentBet === 0 ? `Bet $${val}` : `Raise $${val}`;
+        document.getElementById('btn-bet-raise').textContent = label;
+      }
+
+      function updateHUD() {
+        document.getElementById('hud-hand-num').textContent = `Hand #${game.handNumber} · Blinds $${SMALL_BLIND}/$${BIG_BLIND}`;
+        document.getElementById('hud-street').textContent = game.street;
+        document.getElementById('hud-pot').textContent = `$${game.pot.toLocaleString()}`;
+
+        // Board slots
+        const boardSlots = document.getElementById('hud-board-slots');
+        boardSlots.innerHTML = Array.from({ length: 5 }, (_, idx) => {
+          const c = game.board[idx];
+          return c ? renderMiniCardHTML(c, true) : `<div class="w-9 h-12 rounded-lg border border-dashed border-white/20 bg-white/5"></div>`;
+        }).join('');
+
+        // AI Seats Row (Seats 1, 2, 3)
+        const seatsRow = document.getElementById('seats-hud-row');
+        seatsRow.innerHTML = game.players
+          .slice(1)
+          .map((p) => {
+            const isTurn = game.activeTurn === p.id;
+            const isDealer = game.dealerIdx === p.id;
+            const showCards = game.street === 'SHOWDOWN' && !p.folded;
+            return `
+              <div class="glass-panel rounded-2xl p-2.5 bg-stone-950/82 border ${
+                isTurn ? 'border-amber-400 ring-2 ring-amber-400/35' : p.folded ? 'border-white/5 opacity-60' : 'border-white/15'
+              } shadow-lg flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1">
+                    <span class="text-xs font-bold text-white truncate">${p.name}</span>
+                    ${isDealer ? '<span class="font-mono text-[9px] px-1 rounded bg-amber-400 text-stone-950 font-bold">D</span>' : ''}
+                  </div>
+                  <div class="font-mono text-xs font-bold text-amber-300">$${p.chips.toLocaleString()}</div>
+                  <div class="font-mono text-[9px] text-emerald-300 truncate">${p.lastAction || (p.bet > 0 ? `Bet $${p.bet}` : 'Waiting')}</div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  ${renderMiniCardHTML(p.hand[0], showCards)}
+                  ${renderMiniCardHTML(p.hand[1], showCards)}
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+
+        // Human Player Cards & Hand Strength
+        const human = game.players[0];
+        document.getElementById('hud-player-cards').innerHTML =
+          renderMiniCardHTML(human.hand[0], true) + renderMiniCardHTML(human.hand[1], true);
+        document.getElementById('hud-player-chips').textContent = `$${human.chips.toLocaleString()}`;
+        document.getElementById('hud-player-bet-line').textContent = `Current Bet: $${human.bet} · ${human.lastAction || 'Active'}`;
+        document.getElementById('hud-player-badge').textContent = game.dealerIdx === 0 ? 'DEALER' : (game.activeTurn === 0 ? 'YOUR TURN' : 'SEATED');
+
+        if (human.hand.length === 2) {
+          const best = evaluateBestHoldemHand(human.hand, game.board);
+          document.getElementById('hud-hand-eval').textContent = best.name;
+        }
+
+        // Update 3D Seat Turn Rings
+        seatRings.forEach((ring, idx) => {
+          const active = game.activeTurn === idx;
+          ring.material.opacity = active ? 0.95 : 0.2;
+          const s = active ? 1.16 : 1.0;
+          ring.scale.set(s, s, 1);
+        });
+      }
+
+      // Wire Human Betting Buttons
+      document.getElementById('btn-fold').addEventListener('click', () => {
+        enableHumanControls(false);
+        applyPlayerAction(0, 'fold');
+      });
+
+      document.getElementById('btn-check-call').addEventListener('click', () => {
+        enableHumanControls(false);
+        const human = game.players[0];
+        const toCall = Math.max(0, game.currentBet - human.bet);
+        applyPlayerAction(0, toCall === 0 ? 'check' : 'call');
+      });
+
+      document.getElementById('btn-bet-raise').addEventListener('click', () => {
+        enableHumanControls(false);
+        const val = parseInt(document.getElementById('bet-slider').value, 10) || BIG_BLIND;
+        applyPlayerAction(0, game.currentBet === 0 ? 'bet' : 'raise', val);
+      });
+
+      document.getElementById('bet-slider').addEventListener('input', syncBetSliderLabel);
+
+      document.querySelectorAll('.bet-preset').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const slider = document.getElementById('bet-slider');
+          const minV = parseInt(slider.min, 10) || BIG_BLIND;
+          const maxV = parseInt(slider.max, 10) || 1000;
+          const preset = btn.dataset.preset;
+          let target = minV;
+          if (preset === 'half') target = Math.max(minV, Math.floor(game.pot * 0.5));
+          else if (preset === 'pot') target = Math.max(minV, game.pot);
+          else if (preset === 'allin') target = maxV;
+          slider.value = Math.min(maxV, Math.max(minV, target));
+          syncBetSliderLabel();
+        });
+      });
+
+      document.getElementById('btn-next-hand').addEventListener('click', startNewHand);
+
+      document.getElementById('btn-rebuy').addEventListener('click', () => {
+        game.players.forEach((p) => { p.chips = 1000; });
+        showToast('Free-play chip stacks reset to $1,000. No purchase was made.');
+        updateHUD();
+      });
+
+      /**
+       * ------------------------------------------------------------------------
+       * 7. GRAPHICS SETTINGS, CAMERA VIEWS, SOUND & RULES MODAL
+       * ------------------------------------------------------------------------
+       */
+      const gfxState = {
+        animSpeed: 'standard',
+        camAnim: true
+      };
+
+      function getSpeedMultiplier() {
+        if (gfxState.animSpeed === 'relaxed') return 1.45;
+        if (gfxState.animSpeed === 'turbo') return 0.55;
+        return 1.0;
+      }
+
+      // Camera View Presets
+      const CAM_PRESETS = {
+        overview: { pos: new THREE.Vector3(0, 8.6, 11.2), target: new THREE.Vector3(0, 1.1, 0) },
+        pov: { pos: new THREE.Vector3(0, 2.55, 6.4), target: new THREE.Vector3(0, 1.15, -1.2) },
+        rail: { pos: new THREE.Vector3(-8.5, 4.6, 7.2), target: new THREE.Vector3(0, 1.15, 0) },
+        overhead: { pos: new THREE.Vector3(0, 13.5, 0.01), target: new THREE.Vector3(0, 1.1, 0) }
+      };
+
+      let camGoalPos = null;
+      let camGoalTarget = null;
+
+      document.querySelectorAll('.cam-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.cam;
+          const preset = CAM_PRESETS[key];
+          if (!preset) return;
+
+          document.querySelectorAll('.cam-btn').forEach((b) => {
+            b.className = 'cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold text-stone-300 hover:bg-white/10';
+          });
+          btn.className = 'cam-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500 text-stone-950';
+
+          if (gfxState.camAnim) {
+            camGoalPos = preset.pos.clone();
+            camGoalTarget = preset.target.clone();
+          } else {
+            camera.position.copy(preset.pos);
+            controls.target.copy(preset.target);
+          }
+        });
+      });
+
+      // Graphics Drawer Controls
+      const gfxDrawer = document.getElementById('graphics-drawer');
+      document.getElementById('btn-open-graphics').addEventListener('click', () => {
+        gfxDrawer.classList.remove('translate-x-full');
+      });
+      document.getElementById('btn-close-graphics').addEventListener('click', () => {
+        gfxDrawer.classList.add('translate-x-full');
+      });
+
+      function applyShadowSetting(mode) {
+        if (mode === 'off') {
+          renderer.shadowMap.enabled = false;
+          mainSpot.castShadow = false;
+        } else if (mode === 'medium') {
+          renderer.shadowMap.enabled = true;
+          mainSpot.castShadow = true;
+          mainSpot.shadow.mapSize.width = 1024;
+          mainSpot.shadow.mapSize.height = 1024;
+          mainSpot.shadow.map = null;
+        } else {
+          renderer.shadowMap.enabled = true;
+          mainSpot.castShadow = true;
+          mainSpot.shadow.mapSize.width = 2048;
+          mainSpot.shadow.mapSize.height = 2048;
+          mainSpot.shadow.map = null;
+        }
+        renderer.shadowMap.needsUpdate = true;
+      }
+
+      document.getElementById('gfx-shadows').addEventListener('change', (e) => {
+        applyShadowSetting(e.target.value);
+      });
+
+      document.getElementById('gfx-dpr').addEventListener('input', (e) => {
+        const dpr = parseFloat(e.target.value) || 1.0;
+        document.getElementById('gfx-dpr-label').textContent = `${dpr.toFixed(2).replace(/\.00$/, '.0')}x`;
+        renderer.setPixelRatio(dpr);
+      });
+
+      document.getElementById('gfx-lights').addEventListener('change', (e) => {
+        const on = e.target.checked;
+        mainSpot.intensity = on ? 2.4 : 0.7;
+        rimLight.intensity = on ? 0.75 : 0.1;
+        lampShade.material.emissiveIntensity = on ? 0.35 : 0.05;
+      });
+
+      document.getElementById('gfx-gloss').addEventListener('change', (e) => {
+        const boost = e.target.checked;
+        mahoganyMat.roughness = boost ? 0.22 : 0.65;
+        brassMat.metalness = boost ? 0.88 : 0.35;
+        floorMat.roughness = boost ? 0.35 : 0.8;
+      });
+
+      document.getElementById('gfx-cam-anim').addEventListener('change', (e) => {
+        gfxState.camAnim = e.target.checked;
+      });
+
+      document.querySelectorAll('.anim-speed-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          gfxState.animSpeed = btn.dataset.speed;
+          document.querySelectorAll('.anim-speed-btn').forEach((b) => {
+            b.className = 'anim-speed-btn py-1.5 rounded-lg bg-white/10 text-xs font-semibold text-stone-300';
+          });
+          btn.className = 'anim-speed-btn py-1.5 rounded-lg bg-amber-500 text-stone-950 text-xs font-bold';
+        });
+      });
+
+      document.querySelectorAll('.felt-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const themeKey = btn.dataset.felt;
+          const theme = FELT_THEMES[themeKey];
+          if (!theme) return;
+          feltMat.map = createFeltTexture(theme.felt, theme.line);
+          feltMat.needsUpdate = true;
+
+          document.querySelectorAll('.felt-btn').forEach((b) => {
+            b.classList.remove('border-2', 'border-amber-400');
+            b.classList.add('border', 'border-white/15');
+          });
+          btn.classList.remove('border', 'border-white/15');
+          btn.classList.add('border-2', 'border-amber-400');
+        });
+      });
+
+      // Presets: Low, Medium, High, Ultra
+      document.querySelectorAll('.gfx-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const p = btn.dataset.presetGfx;
+          document.querySelectorAll('.gfx-preset-btn').forEach((b) => {
+            b.className = 'gfx-preset-btn py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-stone-200';
+          });
+          btn.className = 'gfx-preset-btn py-2 rounded-xl bg-amber-500 text-stone-950 text-xs font-bold shadow';
+
+          const dprSlider = document.getElementById('gfx-dpr');
+          const shadowSel = document.getElementById('gfx-shadows');
+          const lightsChk = document.getElementById('gfx-lights');
+          const glossChk = document.getElementById('gfx-gloss');
+
+          if (p === 'low') {
+            dprSlider.value = '0.75';
+            shadowSel.value = 'off';
+            lightsChk.checked = false;
+            glossChk.checked = false;
+          } else if (p === 'medium') {
+            dprSlider.value = '1.0';
+            shadowSel.value = 'medium';
+            lightsChk.checked = true;
+            glossChk.checked = false;
+          } else if (p === 'high') {
+            dprSlider.value = '1.5';
+            shadowSel.value = 'ultra';
+            lightsChk.checked = true;
+            glossChk.checked = true;
+          } else if (p === 'ultra') {
+            dprSlider.value = Math.min(2.0, window.devicePixelRatio || 1.5).toString();
+            shadowSel.value = 'ultra';
+            lightsChk.checked = true;
+            glossChk.checked = true;
+          }
+
+          dprSlider.dispatchEvent(new Event('input'));
+          shadowSel.dispatchEvent(new Event('change'));
+          lightsChk.dispatchEvent(new Event('change'));
+          glossChk.dispatchEvent(new Event('change'));
+          showToast(`Graphics Preset: ${p.toUpperCase()}`);
+        });
+      });
+
+      // Sound & Rules Modals
+      document.getElementById('btn-sound-toggle').addEventListener('click', () => {
+        const next = !SFX.isEnabled();
+        SFX.setEnabled(next);
+        document.getElementById('sound-icon').textContent = next ? '🔊' : '🔇';
+        document.getElementById('sound-label').textContent = next ? 'SFX On' : 'Muted';
+      });
+
+      const rulesModal = document.getElementById('rules-modal');
+      document.getElementById('btn-open-rules').addEventListener('click', () => {
+        rulesModal.classList.remove('hidden');
+        rulesModal.classList.add('flex');
+      });
+      document.getElementById('btn-close-rules').addEventListener('click', () => {
+        rulesModal.classList.add('hidden');
+        rulesModal.classList.remove('flex');
+      });
+
+      /**
+       * ------------------------------------------------------------------------
+       * 8. MAIN ANIMATION LOOP & RESIZE
+       * ------------------------------------------------------------------------
+       */
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const clock = new THREE.Clock();
+      let fpsFrames = 0;
+      let fpsTimer = 0;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        const elapsed = clock.getElapsedTime();
+
+        // FPS Counter
+        fpsFrames++;
+        fpsTimer += dt;
+        if (fpsTimer >= 0.6) {
+          const fps = Math.round(fpsFrames / fpsTimer);
+          const el = document.getElementById('gfx-fps');
+          if (el) el.textContent = fps;
+          fpsFrames = 0;
+          fpsTimer = 0;
+        }
+
+        // Smooth Camera Transition
+        if (camGoalPos && camGoalTarget) {
+          camera.position.lerp(camGoalPos, 0.08);
+          controls.target.lerp(camGoalTarget, 0.08);
+          if (camera.position.distanceTo(camGoalPos) < 0.05 && controls.target.distanceTo(camGoalTarget) < 0.05) {
+            camGoalPos = null;
+            camGoalTarget = null;
+          }
+        }
+
+        // Card & Chip Tweens with Parabolic Arcs
+        for (let i = animatedTweens.length - 1; i >= 0; i--) {
+          const tw = animatedTweens[i];
+          tw.elapsed += dt;
+          const t = Math.min(1, tw.elapsed / tw.duration);
+          const ease = 1 - Math.pow(1 - t, 3);
+
+          tw.mesh.position.lerpVectors(tw.fromPos, tw.toPos, ease);
+          tw.mesh.position.y += Math.sin(t * Math.PI) * tw.arcHeight;
+
+          tw.mesh.rotation.x = tw.fromRot.x + (tw.toRot.x - tw.fromRot.x) * ease;
+          tw.mesh.rotation.y = tw.fromRot.y + (tw.toRot.y - tw.fromRot.y) * ease;
+          tw.mesh.rotation.z = tw.fromRot.z + (tw.toRot.z - tw.fromRot.z) * ease;
+
+          if (t >= 1) {
+            animatedTweens.splice(i, 1);
+            if (tw.onComplete) tw.onComplete();
+          }
+        }
+
+        // Subtle Dealer Puck Pulse
+        dealerPuck.position.y = TABLE_Y + 0.11 + Math.sin(elapsed * 3) * 0.015;
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      const safetyGate = document.getElementById('poker-safety-gate');
+      const safetyAgreement = document.getElementById('poker-safety-agree');
+      const safetyAccept = document.getElementById('poker-safety-accept');
+      safetyAgreement.addEventListener('change', () => {
+        safetyAccept.disabled = !safetyAgreement.checked;
+      });
+      safetyAccept.addEventListener('click', () => {
+        if (!safetyAgreement.checked) return;
+        safetyGate.classList.add('hidden');
+        startNewHand();
+      });
+
+      window.onload = function () {
+        animate();
+      };
+    })();
+  </script>
+  <script type="module" src="../../account-activity.js"></script>
+</body>
+</html>

@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Koops Games — Your 3D Game Room</title>
 
+  <script>
+    (() => {
+      let showIntro = false;
+      try {
+        const key = 'koops.hub.intro.seen.v1';
+        showIntro = sessionStorage.getItem(key) !== '1';
+        if (showIntro) sessionStorage.setItem(key, '1');
+      } catch {}
+      document.documentElement.dataset.koopsHubIntro = showIntro ? 'show' : 'skip';
+    })();
+  </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -101,12 +113,37 @@
     .animate-pulse-soft {
       animation: pulseSoft 2.6s infinite ease-in-out;
     }
+
+    #hub-loading-screen {
+      display: none;
+      opacity: 1;
+      transition: opacity 650ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    html[data-koops-hub-intro="show"] #hub-loading-screen { display: flex; }
+    #hub-loading-screen.is-leaving { opacity: 0; pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) {
+      #hub-loading-screen { transition-duration: 1ms; }
+    }
   </style>
 </head>
 <body class="font-sans bg-lounge-dark text-stone-100 transition-colors duration-500">
 
   <!-- Full-Viewport 3D Game Room Canvas -->
   <div id="canvas-container" aria-label="Interactive 3D Koops Games Parlor"></div>
+
+  <!-- First-visit intro. The Three.js scene animates behind this lightweight UI. -->
+  <section id="hub-loading-screen" class="fixed inset-0 z-[80] flex-col items-center justify-end overflow-hidden bg-stone-950/70 px-5 pb-[12vh] text-center backdrop-blur-[2px]" role="status" aria-live="polite" aria-label="Loading Koops Games">
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_44%,rgba(245,158,11,0.12),transparent_52%)]"></div>
+    <div class="relative z-10 w-full max-w-sm rounded-3xl border border-amber-300/20 bg-stone-950/75 px-6 py-5 shadow-2xl shadow-black/40 backdrop-blur-xl">
+      <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-400/10 font-display text-xl font-bold text-amber-200">K</div>
+      <p class="font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-300">Koops Games</p>
+      <h1 class="mt-1 font-display text-2xl font-bold text-white">Setting the room</h1>
+      <p id="hub-loading-label" class="mt-1 text-xs text-stone-300">Warming up the tables…</p>
+      <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div id="hub-loading-progress" class="h-full w-0 rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-[width] duration-200 ease-out"></div>
+      </div>
+    </div>
+  </section>
 
   <!-- Dynamic Floating 3D Table Tooltip (Tracks hovered 3D table) -->
   <div id="hover-pill" class="fixed z-20 opacity-0 hidden sm:flex flex-col items-center">
@@ -137,7 +174,7 @@
               <span class="font-display font-bold text-base sm:text-lg tracking-tight text-stone-900 dark:text-white leading-none">KOOPS GAMES</span>
               <span class="font-mono text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">3D HUB</span>
             </div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mt-1">GAME ROOM · 7 TABLES READY</p>
+            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mt-1">GAME ROOM · 8 TABLES READY</p>
           </div>
         </button>
 
@@ -165,7 +202,7 @@
       <nav aria-label="Game Categories" class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
         <button data-category="all"
           class="cat-pill active-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all bg-amber-500 text-stone-950 border-amber-400 shadow-lg shadow-amber-500/20">
-          All Tables <span class="font-mono text-[11px] opacity-80 ml-1">(7)</span>
+          All Tables <span class="font-mono text-[11px] opacity-80 ml-1">(8)</span>
         </button>
         <button data-category="strategy"
           class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
@@ -178,6 +215,10 @@
         <button data-category="cue"
           class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
           Cue Sports <span class="font-mono text-[11px] opacity-70 ml-1">(1)</span>
+        </button>
+        <button data-category="cards"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
+          Card Games <span class="font-mono text-[11px] opacity-70 ml-1">(1 · 18+)</span>
         </button>
       </nav>
 
@@ -305,7 +346,7 @@
         </svg>
       </button>
 
-      <!-- Scrollable Strip of 7 Game Tables -->
+      <!-- Scrollable Strip of Game Tables -->
       <div id="directory-strip"
         class="w-full max-w-6xl transition-all duration-300 overflow-hidden max-h-40 opacity-100">
         <div id="directory-cards" class="flex items-stretch gap-2.5 overflow-x-auto no-scrollbar pb-1 px-0.5">
@@ -350,11 +391,11 @@
       <!-- Room Stats Grid -->
       <div class="grid grid-cols-3 gap-2.5 mt-4">
         <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
-          <div class="font-display font-bold text-xl text-amber-500">7</div>
+          <div class="font-display font-bold text-xl text-amber-500">8</div>
           <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Tables Open</div>
         </div>
         <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
-          <div id="stat-visited" class="font-display font-bold text-xl text-emerald-500">1 / 7</div>
+        <div id="stat-visited" class="font-display font-bold text-xl text-emerald-500">1 / 8</div>
           <div class="font-mono text-[10px] uppercase text-stone-500 dark:text-stone-400 mt-0.5">Inspected</div>
         </div>
         <div class="p-3 rounded-2xl bg-stone-100 dark:bg-white/5 border border-stone-200 dark:border-white/10 text-center">
@@ -363,7 +404,7 @@
         </div>
       </div>
 
-      <p id="account-feedback" class="text-xs text-emerald-500 font-medium mt-3 hidden">Seat name updated for all 7 tables!</p>
+      <p id="account-feedback" class="text-xs text-emerald-500 font-medium mt-3 hidden">Seat name updated for all 8 tables!</p>
     </div>
   </div>
 
@@ -378,8 +419,11 @@
       <p id="launch-url-preview" class="font-mono text-xs text-stone-500 dark:text-stone-400 mt-2 bg-stone-100 dark:bg-black/40 py-2 px-3 rounded-xl border border-stone-200 dark:border-white/10 break-all">
         https://koopatroop22.github.io/Koops-Games/
       </p>
-      <p class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+      <p id="launch-description" class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
         Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.
+      </p>
+      <p id="launch-safety-note" class="hidden text-xs text-amber-800 dark:text-amber-200 mt-3 leading-relaxed rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+        Poker is a gambling-style game. This version is for adults 18+ and uses free-play virtual chips only. No real-money betting, purchases, prizes, cash-out, or transfer of chips.
       </p>
       <div class="mt-5 flex items-center gap-2.5">
         <button id="btn-cancel-launch"
@@ -401,10 +445,10 @@
 
       /**
        * ============================================================================
-       * 1. GAME HUB CATALOG DATA (All 7 Koops Games across 3 Categories)
+       * 1. GAME HUB CATALOG DATA
        * ============================================================================
        */
-      const BASE_HUB_URL = 'https://koopatroop22.github.io/Koops-Games/';
+      const BASE_HUB_URL = new URL('./', window.location.href).href;
 
       const GAMES = [
         {
@@ -418,7 +462,7 @@
           dotClass: 'bg-amber-400',
           position: { x: -10.5, z: -6.5 },
           camOffset: { x: -10.5, y: 7.2, z: 1.5 },
-          url: BASE_HUB_URL + 'monopoly.html',
+          url: BASE_HUB_URL + 'Default%20Games/Monopoly/monopoly.html',
           description: 'Buy, trade, and develop Bournemouth, Christchurch & Poole landmarks on an interactive 3D board complete with animated dice, houses, and hotels.',
           highlights: ['3D Property Board', '2–4 Pass & Play / AI', 'Custom Houses & Hotels']
         },
@@ -433,7 +477,7 @@
           dotClass: 'bg-sky-400',
           position: { x: -12.0, z: 2.5 },
           camOffset: { x: -12.0, y: 7.5, z: 10.5 },
-          url: BASE_HUB_URL + 'tower-defence.html',
+          url: BASE_HUB_URL + 'Default%20Games/tower-defence/index.html',
           description: 'Command elemental artillery turrets along winding 3D terrain paths to defend your crystal nexus against escalating waves of armored invaders.',
           highlights: ['3D Terrain Waves', 'Upgradeable Turrets', 'Tactical Sightlines']
         },
@@ -448,7 +492,7 @@
           dotClass: 'bg-blue-400',
           position: { x: -7.5, z: 9.5 },
           camOffset: { x: -7.5, y: 7.0, z: 17.0 },
-          url: BASE_HUB_URL + 'battleships.html',
+          url: BASE_HUB_URL + 'Default%20Games/Battleships/battleships.html',
           description: 'Deploy your fleet across dual naval radar grids, call coordinates, and hunt down enemy dreadnoughts before your own armada sinks.',
           highlights: ['Dual Tactical Grids', 'Smart Naval AI', 'Hit & Sunk Tracking']
         },
@@ -463,7 +507,7 @@
           dotClass: 'bg-amber-300',
           position: { x: 0.0, z: -8.5 },
           camOffset: { x: 0.0, y: 7.2, z: -0.5 },
-          url: BASE_HUB_URL + 'chess.html',
+          url: BASE_HUB_URL + 'Default%20Games/Chess/chess.html',
           description: 'Classic tournament chess rendered with sculpted 3D Staunton pieces, legal move highlights, check warnings, and adjustable AI opponents.',
           highlights: ['Sculpted 3D Pieces', 'Solo AI & 2-Player', 'Move History & Orbit']
         },
@@ -478,7 +522,7 @@
           dotClass: 'bg-rose-400',
           position: { x: 0.0, z: 1.5 },
           camOffset: { x: 0.0, y: 6.4, z: 9.5 },
-          url: BASE_HUB_URL + 'connect4.html',
+          url: BASE_HUB_URL + 'Default%20Games/Connect%204/Connect4.html',
           description: 'Drop crimson and gold discs into the vertical 3D frame, set up diagonal traps, and race to align four in a row.',
           highlights: ['Physics Disc Drops', 'Instant Rematches', 'Solo or Local 2P']
         },
@@ -493,7 +537,7 @@
           dotClass: 'bg-red-400',
           position: { x: 5.5, z: 9.5 },
           camOffset: { x: 5.5, y: 7.2, z: 17.0 },
-          url: BASE_HUB_URL + 'minesweeper.html',
+          url: BASE_HUB_URL + 'Default%20Games/Minesweeper/minesweeper.html',
           description: 'Sweep beveled 3D hazard tiles, deduce hidden minefields with crisp numeric clues, and plant warning flags with precision.',
           highlights: ['3D Beveled Grid', 'Flag & Chord Controls', 'Multiple Grid Sizes']
         },
@@ -508,9 +552,24 @@
           dotClass: 'bg-emerald-400',
           position: { x: 11.5, z: -2.0 },
           camOffset: { x: 11.5, y: 7.5, z: 7.2 },
-          url: BASE_HUB_URL + 'snooker.html',
+          url: BASE_HUB_URL + 'Default%20Games/snooker/index.html',
           description: 'Step up to a full-size mahogany snooker table with lush green baize, realistic spin physics, aiming guidelines, and 2-player frame scoring.',
           highlights: ['Full Mahogany Table', 'Cue Spin & Power', '2-Player Frame Rules']
+        },
+        {
+          id: 'poker',
+          title: 'Texas Hold’em Poker',
+          category: 'cards',
+          categoryLabel: 'Card Games · 18+',
+          tag: '18+ · FREE-PLAY CHIPS ONLY',
+          accentHex: '#d6a84f',
+          accentClass: 'text-amber-300',
+          dotClass: 'bg-amber-300',
+          position: { x: 11.5, z: 8.5 },
+          camOffset: { x: 11.5, y: 9.0, z: 16.0 },
+          url: BASE_HUB_URL + 'Default%20Games/Poker/Poker.html',
+          description: 'Play Texas Hold’em against AI at a 3D poker table. Adults 18+ only. Chips are fictional and cannot be purchased, transferred, redeemed, or exchanged for prizes.',
+          highlights: ['18+ Age Agreement', 'Virtual Chips Only', 'No Cash or Prizes']
         }
       ];
 
@@ -533,8 +592,14 @@
         cue: {
           pos: new THREE.Vector3(11.5, 10.5, 10.5),
           target: new THREE.Vector3(11.5, 1.0, -2.0)
+        },
+        cards: {
+          pos: new THREE.Vector3(11.5, 11.5, 17.5),
+          target: new THREE.Vector3(11.5, 1.0, 8.5)
         }
       };
+
+      const showHubIntro = document.documentElement.dataset.koopsHubIntro === 'show';
 
       /**
        * ============================================================================
@@ -749,7 +814,7 @@
 
       /**
        * ============================================================================
-       * 5. PROCEDURAL 3D GAME TABLES BUILDER (All 7 Distinct Game Tables)
+       * 5. PROCEDURAL 3D GAME TABLES BUILDER
        * ============================================================================
        */
       const tableObjects = {}; // Maps game.id -> { root, interactiveGroup, ringMesh, baseY, animParts }
@@ -1240,7 +1305,62 @@
         return { root: group, ringMesh, animParts: {} };
       }
 
-      // Instantiate all 7 tables into the 3D scene
+      /**
+       * TABLE 8: Poker (free-play simulation only)
+       */
+      function buildPokerTable(game) {
+        const { group, ringMesh, topY } = createTablePedestal(5.6, 5.0, 1.65, game.accentHex);
+        const pokerGroup = new THREE.Group();
+        pokerGroup.position.y = topY;
+
+        const felt = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.92, 1.92, 0.16, 48),
+          new THREE.MeshStandardMaterial({ color: '#07583f', roughness: 0.82 })
+        );
+        felt.scale.z = 0.72;
+        felt.position.y = 0.16;
+        felt.receiveShadow = true;
+        pokerGroup.add(felt);
+
+        const rail = new THREE.Mesh(
+          new THREE.TorusGeometry(1.94, 0.2, 14, 56),
+          new THREE.MeshStandardMaterial({ color: '#5c2c16', roughness: 0.3, metalness: 0.12 })
+        );
+        rail.scale.z = 0.72;
+        rail.rotation.x = Math.PI / 2;
+        rail.position.y = 0.28;
+        rail.castShadow = true;
+        pokerGroup.add(rail);
+
+        const chipMaterials = ['#e11d48', '#f8fafc', '#2563eb'].map((color) =>
+          new THREE.MeshStandardMaterial({ color, roughness: 0.3 })
+        );
+        for (let stack = 0; stack < 3; stack++) {
+          for (let level = 0; level < 4; level++) {
+            const chip = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.13, 0.13, 0.045, 20),
+              chipMaterials[stack]
+            );
+            chip.position.set(-0.42 + stack * 0.42, 0.27 + level * 0.05, 0.15);
+            chip.castShadow = true;
+            pokerGroup.add(chip);
+          }
+        }
+
+        const cardMaterial = new THREE.MeshStandardMaterial({ color: '#fffdf5', roughness: 0.55 });
+        for (let card = 0; card < 2; card++) {
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.025, 0.38), cardMaterial);
+          mesh.position.set(-0.15 + card * 0.3, 0.255, -0.55);
+          mesh.rotation.y = card * 0.12;
+          mesh.castShadow = true;
+          pokerGroup.add(mesh);
+        }
+
+        group.add(pokerGroup);
+        return { root: group, ringMesh, animParts: {} };
+      }
+
+      // Instantiate all game tables into the 3D scene
       const builders = {
         'monopoly': buildMonopolyTable,
         'tower-defence': buildTowerDefenceTable,
@@ -1248,20 +1368,24 @@
         'chess': buildChessTable,
         'connect4': buildConnect4Table,
         'minesweeper': buildMinesweeperTable,
-        'snooker': buildSnookerTable
+        'snooker': buildSnookerTable,
+        'poker': buildPokerTable
       };
 
       GAMES.forEach((game) => {
         const built = builders[game.id](game);
         built.root.position.set(game.position.x, 0, game.position.z);
+        built.root.visible = !showHubIntro;
+        if (showHubIntro) built.root.scale.setScalar(0.001);
         scene.add(built.root);
 
         // Invisible generous hit-box collider so tapping/clicking on mobile & desktop is effortless
         const hitBox = new THREE.Mesh(
-          new THREE.BoxGeometry(5.0, 3.4, game.id === 'snooker' ? 7.2 : 5.0),
+          new THREE.BoxGeometry(game.id === 'poker' ? 6.8 : 5.0, 3.4, game.id === 'snooker' ? 7.2 : game.id === 'poker' ? 6.2 : 5.0),
           new THREE.MeshBasicMaterial({ visible: false })
         );
         hitBox.position.set(game.position.x, 1.6, game.position.z);
+        hitBox.visible = !showHubIntro;
         hitBox.userData.gameId = game.id;
         scene.add(hitBox);
         raycastTargets.push(hitBox);
@@ -1272,9 +1396,67 @@
           ringMesh: built.ringMesh,
           animParts: built.animParts,
           targetY: 0,
-          targetScale: 1
+          targetScale: 1,
+          spawnStartAt: null,
+          hitBox
         };
       });
+
+      // A small Three.js parlor emblem animates during the first-visit intro.
+      const hubIntroGroup = new THREE.Group();
+      hubIntroGroup.position.set(0, 3.4, 0);
+      hubIntroGroup.visible = showHubIntro;
+      const introCore = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.62, 1),
+        new THREE.MeshStandardMaterial({ color: '#fbbf24', emissive: '#b45309', emissiveIntensity: 0.72, metalness: 0.48, roughness: 0.22 })
+      );
+      introCore.castShadow = true;
+      hubIntroGroup.add(introCore);
+      const introRingA = new THREE.Mesh(
+        new THREE.TorusGeometry(1.18, 0.045, 12, 72),
+        new THREE.MeshStandardMaterial({ color: '#fcd34d', emissive: '#d97706', emissiveIntensity: 0.45, metalness: 0.62, roughness: 0.24 })
+      );
+      introRingA.rotation.x = Math.PI / 2;
+      hubIntroGroup.add(introRingA);
+      const introRingB = new THREE.Mesh(
+        new THREE.TorusGeometry(0.92, 0.025, 10, 64),
+        new THREE.MeshStandardMaterial({ color: '#6ee7b7', emissive: '#059669', emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.3 })
+      );
+      introRingB.rotation.set(0.9, 0.35, 0.55);
+      hubIntroGroup.add(introRingB);
+      const introTokens = [];
+      ['#f43f5e', '#38bdf8', '#a3e635', '#fbbf24'].forEach((color, index) => {
+        const token = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22, 0.09, 0.28),
+          new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.16, metalness: 0.28, roughness: 0.32 })
+        );
+        token.castShadow = true;
+        introTokens.push(token);
+        hubIntroGroup.add(token);
+      });
+      scene.add(hubIntroGroup);
+
+      const hubLoadingScreen = document.getElementById('hub-loading-screen');
+      const hubLoadingLabel = document.getElementById('hub-loading-label');
+      const hubLoadingProgress = document.getElementById('hub-loading-progress');
+      let hubIntroStartedAt = null;
+      let hubIntroSpawnStarted = false;
+
+      function spawnHubTables(startAt) {
+        hubIntroGroup.visible = false;
+        GAMES.forEach((game, index) => {
+          const obj = tableObjects[game.id];
+          obj.root.visible = true;
+          obj.root.scale.setScalar(0.001);
+          obj.root.position.y = -0.8;
+          obj.hitBox.visible = true;
+          obj.spawnStartAt = startAt + index * 0.095;
+        });
+        if (hubLoadingScreen) {
+          hubLoadingScreen.classList.add('is-leaving');
+          setTimeout(() => hubLoadingScreen.remove(), 700);
+        }
+      }
 
       /**
        * ============================================================================
@@ -1360,7 +1542,7 @@
 
         state.selectedGameId = game.id;
         state.inspectedIds.add(game.id);
-        document.getElementById('stat-visited').textContent = `${state.inspectedIds.size} / 7`;
+        document.getElementById('stat-visited').textContent = `${state.inspectedIds.size} / ${GAMES.length}`;
 
         // Smooth camera flight to selected game table
         state.desiredTarget.set(game.position.x, 1.5, game.position.z);
@@ -1610,6 +1792,10 @@
         document.getElementById('launch-title').textContent = game.title;
         document.getElementById('launch-url-preview').textContent = game.url;
         document.getElementById('btn-confirm-external').href = game.url;
+        document.getElementById('launch-safety-note').classList.toggle('hidden', game.id !== 'poker');
+        document.getElementById('launch-description').textContent = game.id === 'poker'
+          ? 'Before playing, review and accept the 18+ free-play agreement on the Poker page.'
+          : 'Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.';
         launchModal.classList.remove('hidden');
         launchModal.classList.add('flex');
       });
@@ -1636,6 +1822,38 @@
         requestAnimationFrame(animate);
         const elapsed = clock.getElapsedTime();
 
+        if (showHubIntro) {
+          if (hubIntroStartedAt === null) hubIntroStartedAt = elapsed;
+          if (!hubIntroSpawnStarted) {
+            const progress = Math.min(1, (elapsed - hubIntroStartedAt) / 1.85);
+            if (hubLoadingProgress) hubLoadingProgress.style.width = `${Math.round(progress * 100)}%`;
+            if (hubLoadingLabel) {
+              hubLoadingLabel.textContent = progress < 0.34
+                ? 'Warming up the tables…'
+                : progress < 0.72
+                  ? 'Laying out the room…'
+                  : progress < 1
+                    ? 'Polishing the parlor…'
+                    : 'Ready — welcome in';
+            }
+            if (progress >= 1) {
+              hubIntroSpawnStarted = true;
+              setTimeout(() => spawnHubTables(clock.getElapsedTime()), 180);
+            }
+          }
+        }
+
+        if (hubIntroGroup.visible) {
+          hubIntroGroup.rotation.y = elapsed * 0.24;
+          introCore.rotation.set(elapsed * 0.18, elapsed * 0.42, elapsed * 0.11);
+          introCore.scale.setScalar(1 + Math.sin(elapsed * 2.2) * 0.045);
+          introTokens.forEach((token, index) => {
+            const angle = elapsed * 0.85 + (index / introTokens.length) * Math.PI * 2;
+            token.position.set(Math.cos(angle) * 1.5, Math.sin(elapsed * 1.7 + index) * 0.16, Math.sin(angle) * 1.5);
+            token.rotation.set(elapsed * 0.5, angle, elapsed * 0.38);
+          });
+        }
+
         // Smooth camera flight interpolation
         if (state.isTransitioning) {
           camera.position.lerp(state.desiredCamPos, 0.065);
@@ -1649,7 +1867,7 @@
           }
         }
 
-        // Animate each of the 7 3D game tables (elevation on hover/select + micro-details)
+        // Animate game tables, including their staggered first-visit entrance.
         GAMES.forEach((game, idx) => {
           const obj = tableObjects[game.id];
           const isHovered = state.hoveredGameId === game.id;
@@ -1659,7 +1877,19 @@
 
           // Subtle float elevation when hovered or selected
           const targetY = isSelected ? 0.28 : isHovered ? 0.18 : 0;
-          obj.root.position.y += (targetY - obj.root.position.y) * 0.12;
+          if (obj.spawnStartAt !== null) {
+            const progress = Math.max(0, Math.min(1, (elapsed - obj.spawnStartAt) / 0.62));
+            const eased = 1 - Math.pow(1 - progress, 3);
+            obj.root.scale.setScalar(0.001 + eased * 0.999);
+            obj.root.position.y = targetY - (1 - eased) * 0.8 + Math.sin(progress * Math.PI) * 0.2;
+            if (progress >= 1) {
+              obj.spawnStartAt = null;
+              obj.root.scale.set(1, 1, 1);
+              obj.root.position.y = targetY;
+            }
+          } else {
+            obj.root.position.y += (targetY - obj.root.position.y) * 0.12;
+          }
 
           // Glow ring opacity & pulse
           const targetOpacity = isDimmedByFilter

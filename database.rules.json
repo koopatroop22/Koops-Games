@@ -5,29 +5,70 @@
     "connect4Rooms": {
       "$roomCode": {
         ".read": "auth !== null && (!data.exists() || data.child('status').val() === 'waiting' || auth.uid === data.child('hostUid').val() || auth.uid === data.child('guestUid').val())",
-        ".write": "auth !== null && $roomCode.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/) && ((!data.exists() && auth.uid === newData.child('hostUid').val() && newData.child('status').val() === 'waiting' && newData.child('currentTurnUid').val() === auth.uid && newData.child('moveCount').val() === 0) || (data.exists() && data.child('status').val() === 'waiting' && !data.child('guestUid').exists() && auth.uid !== data.child('hostUid').val() && newData.child('hostUid').val() === data.child('hostUid').val() && newData.child('hostName').val() === data.child('hostName').val() && newData.child('guestUid').val() === auth.uid && newData.child('status').val() === 'playing' && newData.child('currentTurnUid').val() === data.child('hostUid').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('moveCount').val() === data.child('moveCount').val()) || (data.exists() && data.child('status').val() === 'playing' && data.child('currentTurnUid').val() === auth.uid && newData.child('hostUid').val() === data.child('hostUid').val() && newData.child('hostName').val() === data.child('hostName').val() && newData.child('guestUid').val() === data.child('guestUid').val() && newData.child('guestName').val() === data.child('guestName').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('moveCount').val() === data.child('moveCount').val() + 1 && newData.child('moves').child(data.child('moveCount').val() + '').child('uid').val() === auth.uid && ((newData.child('status').val() === 'playing' && ((auth.uid === data.child('hostUid').val() && newData.child('currentTurnUid').val() === data.child('guestUid').val()) || (auth.uid === data.child('guestUid').val() && newData.child('currentTurnUid').val() === data.child('hostUid').val())) && !newData.child('winnerUid').exists()) || (newData.child('status').val() === 'finished' && !newData.child('currentTurnUid').exists() && (!newData.child('winnerUid').exists() || newData.child('winnerUid').val() === auth.uid)))))",
-        ".validate": "newData.hasChildren(['hostUid', 'hostName', 'status', 'createdAt', 'updatedAt', 'moveCount']) && newData.child('hostUid').isString() && newData.child('hostName').isString() && newData.child('hostName').val().length > 0 && newData.child('hostName').val().length <= 20 && newData.child('createdAt').isNumber() && newData.child('updatedAt').isNumber() && newData.child('moveCount').isNumber() && newData.child('moveCount').val() >= 0 && newData.child('moveCount').val() <= 42 && ((newData.child('status').val() === 'waiting' && newData.child('moveCount').val() === 0 && !newData.child('guestUid').exists() && !newData.child('guestName').exists() && !newData.child('moves').exists() && !newData.child('winnerUid').exists() && newData.child('currentTurnUid').val() === newData.child('hostUid').val()) || (newData.child('status').val() === 'playing' && newData.child('guestUid').isString() && newData.child('guestUid').val() !== newData.child('hostUid').val() && newData.child('guestName').isString() && newData.child('guestName').val().length > 0 && newData.child('guestName').val().length <= 20 && newData.child('moveCount').val() < 42 && ((newData.child('moveCount').val() === 0 && !newData.child('moves').exists()) || (newData.child('moveCount').val() > 0 && newData.child('moves').hasChildren())) && (newData.child('currentTurnUid').val() === newData.child('hostUid').val() || newData.child('currentTurnUid').val() === newData.child('guestUid').val()) && !newData.child('winnerUid').exists()) || (newData.child('status').val() === 'finished' && newData.child('guestUid').isString() && newData.child('guestUid').val() !== newData.child('hostUid').val() && newData.child('guestName').isString() && newData.child('guestName').val().length > 0 && newData.child('guestName').val().length <= 20 && newData.child('moveCount').val() >= 1 && !newData.child('currentTurnUid').exists() && newData.child('moves').hasChildren() && (!newData.child('winnerUid').exists() || newData.child('winnerUid').val() === newData.child('hostUid').val() || newData.child('winnerUid').val() === newData.child('guestUid').val())))",
-        "hostUid": { ".validate": "newData.isString()" },
-        "hostName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20" },
-        "guestUid": { ".validate": "newData.isString()" },
-        "guestName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20" },
-        "status": { ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'finished'" },
-        "currentTurnUid": { ".validate": "newData.isString()" },
-        "winnerUid": { ".validate": "newData.isString()" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        "updatedAt": { ".validate": "newData.isNumber()" },
-        "moveCount": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 42" },
+        ".write": "auth !== null && $roomCode.matches(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/) && ((!data.exists() && auth.uid === newData.child('hostUid').val() && newData.child('status').val() === 'waiting' && newData.child('currentTurnUid').val() === auth.uid && newData.child('moveCount').val() === 0 && newData.child('round').val() === 1) || (data.exists() && data.child('status').val() === 'waiting' && !data.child('guestUid').exists() && auth.uid !== data.child('hostUid').val() && newData.child('hostUid').val() === data.child('hostUid').val() && newData.child('hostName').val() === data.child('hostName').val() && newData.child('guestUid').val() === auth.uid && newData.child('status').val() === 'playing' && newData.child('currentTurnUid').val() === data.child('hostUid').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('moveCount').val() === data.child('moveCount').val() && newData.child('round').val() === data.child('round').val()) || (data.exists() && data.child('status').val() === 'playing' && data.child('currentTurnUid').val() === auth.uid && newData.child('hostUid').val() === data.child('hostUid').val() && newData.child('hostName').val() === data.child('hostName').val() && newData.child('guestUid').val() === data.child('guestUid').val() && newData.child('guestName').val() === data.child('guestName').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('round').val() === data.child('round').val() && newData.child('moveCount').val() === data.child('moveCount').val() + 1 && newData.child('moves').child(data.child('moveCount').val() + '').child('uid').val() === auth.uid && ((newData.child('status').val() === 'playing' && ((auth.uid === data.child('hostUid').val() && newData.child('currentTurnUid').val() === data.child('guestUid').val()) || (auth.uid === data.child('guestUid').val() && newData.child('currentTurnUid').val() === data.child('hostUid').val())) && !newData.child('winnerUid').exists()) || (newData.child('status').val() === 'finished' && !newData.child('currentTurnUid').exists() && (!newData.child('winnerUid').exists() || newData.child('winnerUid').val() === auth.uid)))) || (data.exists() && data.child('status').val() === 'finished' && data.child('hostRematchReady').val() === true && data.child('guestRematchReady').val() === true && (auth.uid === data.child('hostUid').val() || auth.uid === data.child('guestUid').val()) && newData.child('status').val() === 'playing' && newData.child('hostUid').val() === data.child('hostUid').val() && newData.child('hostName').val() === data.child('hostName').val() && newData.child('guestUid').val() === data.child('guestUid').val() && newData.child('guestName').val() === data.child('guestName').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('round').val() === data.child('round').val() + 1 && newData.child('moveCount').val() === 0 && newData.child('currentTurnUid').val() === data.child('hostUid').val() && !newData.child('moves').exists() && !newData.child('winnerUid').exists() && !newData.child('hostRematchReady').exists() && !newData.child('guestRematchReady').exists()))",
+        ".validate": "newData.hasChildren(['hostUid', 'hostName', 'status', 'createdAt', 'updatedAt', 'moveCount', 'round']) && newData.child('hostUid').isString() && newData.child('hostName').isString() && newData.child('hostName').val().length > 0 && newData.child('hostName').val().length <= 20 && newData.child('createdAt').isNumber() && newData.child('updatedAt').isNumber() && newData.child('moveCount').isNumber() && newData.child('moveCount').val() >= 0 && newData.child('moveCount').val() <= 42 && newData.child('round').isNumber() && newData.child('round').val() >= 1 && ((newData.child('status').val() === 'waiting' && newData.child('moveCount').val() === 0 && newData.child('round').val() === 1 && !newData.child('guestUid').exists() && !newData.child('guestName').exists() && !newData.child('moves').exists() && !newData.child('winnerUid').exists() && !newData.child('hostRematchReady').exists() && !newData.child('guestRematchReady').exists() && newData.child('currentTurnUid').val() === newData.child('hostUid').val()) || (newData.child('status').val() === 'playing' && newData.child('guestUid').isString() && newData.child('guestUid').val() !== newData.child('hostUid').val() && newData.child('guestName').isString() && newData.child('guestName').val().length > 0 && newData.child('guestName').val().length <= 20 && newData.child('moveCount').val() < 42 && ((newData.child('moveCount').val() === 0 && !newData.child('moves').exists()) || (newData.child('moveCount').val() > 0 && newData.child('moves').hasChildren())) && (newData.child('currentTurnUid').val() === newData.child('hostUid').val() || newData.child('currentTurnUid').val() === newData.child('guestUid').val()) && !newData.child('winnerUid').exists() && !newData.child('hostRematchReady').exists() && !newData.child('guestRematchReady').exists()) || (newData.child('status').val() === 'finished' && newData.child('guestUid').isString() && newData.child('guestUid').val() !== newData.child('hostUid').val() && newData.child('guestName').isString() && newData.child('guestName').val().length > 0 && newData.child('guestName').val().length <= 20 && newData.child('moveCount').val() >= 1 && !newData.child('currentTurnUid').exists() && newData.child('moves').hasChildren() && (!newData.child('winnerUid').exists() || newData.child('winnerUid').val() === newData.child('hostUid').val() || newData.child('winnerUid').val() === newData.child('guestUid').val()) && (!newData.child('hostRematchReady').exists() || newData.child('hostRematchReady').val() === true) && (!newData.child('guestRematchReady').exists() || newData.child('guestRematchReady').val() === true)))",
+        "hostUid": {
+          ".validate": "newData.isString()"
+        },
+        "hostName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20"
+        },
+        "guestUid": {
+          ".validate": "newData.isString()"
+        },
+        "guestName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20"
+        },
+        "status": {
+          ".validate": "newData.val() === 'waiting' || newData.val() === 'playing' || newData.val() === 'finished'"
+        },
+        "currentTurnUid": {
+          ".validate": "newData.isString()"
+        },
+        "winnerUid": {
+          ".validate": "newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "moveCount": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 42"
+        },
         "moves": {
           ".validate": "newData.hasChildren()",
           "$moveIndex": {
             ".validate": "(!data.exists() && $moveIndex === data.parent().parent().child('moveCount').val() + '' && newData.hasChildren(['uid', 'column', 'createdAt']) && newData.child('uid').isString() && (newData.child('column').val() === 0 || newData.child('column').val() === 1 || newData.child('column').val() === 2 || newData.child('column').val() === 3 || newData.child('column').val() === 4 || newData.child('column').val() === 5 || newData.child('column').val() === 6) && newData.child('createdAt').isNumber()) || (data.exists() && newData.child('uid').val() === data.child('uid').val() && newData.child('column').val() === data.child('column').val() && newData.child('createdAt').val() === data.child('createdAt').val())",
-            "uid": { ".validate": "newData.isString()" },
-            "column": { ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 4 || newData.val() === 5 || newData.val() === 6)" },
-            "createdAt": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            "uid": {
+              ".validate": "newData.isString()"
+            },
+            "column": {
+              ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1 || newData.val() === 2 || newData.val() === 3 || newData.val() === 4 || newData.val() === 5 || newData.val() === 6)"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
-        "$other": { ".validate": false }
+        "$other": {
+          ".validate": false
+        },
+        "round": {
+          ".validate": "newData.isNumber() && newData.val() >= 1"
+        },
+        "hostRematchReady": {
+          ".write": "auth !== null && data.parent().child('status').val() === 'finished' && auth.uid === data.parent().child('hostUid').val() && !data.exists() && newData.val() === true",
+          ".validate": "newData.isBoolean()"
+        },
+        "guestRematchReady": {
+          ".write": "auth !== null && data.parent().child('status').val() === 'finished' && auth.uid === data.parent().child('guestUid').val() && !data.exists() && newData.val() === true",
+          ".validate": "newData.isBoolean()"
+        }
       }
     }
   }

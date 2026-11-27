@@ -2781,6 +2781,8 @@
           this.onlineMovePending = false;
           this.onlineProcessingMoves = false;
           this.onlineHasStarted = false;
+          this.onlineRound = 0;
+          this.onlineRematchPending = false;
           this.onlineUser = null;
 
           this.cacheDom();
@@ -2987,6 +2989,7 @@
                   status: 'waiting',
                   currentTurnUid: user.uid,
                   moveCount: 0,
+                  round: 1,
                   createdAt: Date.now(),
                   updatedAt: Date.now()
                 };
@@ -2996,6 +2999,7 @@
               this.onlineRoomCode = code;
               this.onlineRoomRef = roomRef;
               this.onlineRoomData = result.snapshot.val();
+              this.onlineRound = Number(this.onlineRoomData?.round) || 1;
               this.onlineHasStarted = false;
               this.onlineRoomCodeValue.textContent = code;
               this.onlineRoomCodeDisplay.classList.remove('hidden');
@@ -3123,6 +3127,7 @@
             this.onlineRoomCode = code;
             this.onlineRoomRef = roomRef;
             this.onlineRoomData = result.snapshot.val();
+            this.onlineRound = Number(this.onlineRoomData?.round) || 1;
             this.onlineHasStarted = false;
             this.onlineRoomCodeDisplay.classList.add('hidden');
             if (this.onlineNameInput) this.onlineNameInput.disabled = true;
@@ -3157,6 +3162,13 @@
         handleOnlineRoomUpdate(code) {
           const room = this.onlineRoomData;
           if (!room || code !== this.onlineRoomCode) return;
+          const roomRound = Number(room.round) || 1;
+          if (!this.onlineRound) {
+            this.onlineRound = roomRound;
+          } else if (roomRound > this.onlineRound) {
+            this.onlineRound = roomRound;
+            this.beginOnlineRematch(room);
+          }
           if (room.status === 'waiting') {
             this.setOnlineStatus(`Room ${code} is ready. Waiting for another player to join…`);
             return;
@@ -3173,6 +3185,83 @@
             if (this.inMainMenu) this.launchFromMenu();
           }
           this.drainOnlineMoves();
+        }
+
+        async requestOnlineRematch() {
+          const roomRef = this.onlineRoomRef;
+          const user = auth?.currentUser;
+          if (!roomRef || !user || this.onlineRoomData?.status !== 'finished' || this.onlineRematchPending) return;
+
+          this.onlineRematchPending = true;
+          this.updateHUD();
+          this.setOnlineStatus('Sending your rematch request...');
+          try {
+            const isHost = user.uid === this.onlineRoomData.hostUid;
+            const ownReadyKey = isHost ? 'hostRematchReady' : 'guestRematchReady';
+            const ownReadyRef = ref(realtimeDb, `connect4Rooms/${this.onlineRoomCode}/${ownReadyKey}`);
+            const readyResult = await runTransaction(ownReadyRef, (current) => current === true ? undefined : true, { applyLocally: false });
+            if (!readyResult.committed) {
+              this.onlineRematchPending = false;
+              this.updateHUD();
+              this.setOnlineStatus('Your rematch request is already waiting for the other player.');
+              return;
+            }
+
+            // Each player writes only their own ready flag. Reset the room
+            // atomically only after both flags have been accepted by Firebase.
+            const result = await runTransaction(roomRef, (current) => {
+              if (!current || current.status !== 'finished' || current.hostRematchReady !== true || current.guestRematchReady !== true) return;
+              const next = {
+                ...current,
+                status: 'playing',
+                currentTurnUid: current.hostUid,
+                moveCount: 0,
+                round: (Number(current.round) || 1) + 1,
+                updatedAt: Date.now()
+              };
+              delete next.moves;
+              delete next.winnerUid;
+              delete next.hostRematchReady;
+              delete next.guestRematchReady;
+              return next;
+            }, { applyLocally: false });
+
+            if (result.committed) this.onlineRoomData = result.snapshot.val();
+            this.onlineRematchPending = false;
+            if (this.onlineRoomData?.status === 'finished') this.setOnlineStatus('Rematch requested. Waiting for the other player to accept...');
+            this.updateHUD();
+          } catch (error) {
+            this.onlineRematchPending = false;
+            this.updateHUD();
+            this.setOnlineStatus(this.onlineErrorMessage(error), true);
+          }
+        }
+
+        beginOnlineRematch(room) {
+          this.onlineRematchPending = false;
+          this.onlineProcessingMoves = false;
+          this.onlineMovePending = false;
+          clearTimeout(this.botTimeoutId);
+          this.isBotThinking = false;
+          this.isAnimatingMove = false;
+          this.isTransitioning = true;
+          this.sound.playTransitionSweep(false);
+          this.setTransitionOverlay(true, 'Rematch accepted — setting up a fresh board…');
+          this.updateHUD();
+
+          this.hideGameOverModalSmooth(() => {
+            this.sceneCtrl.animateClearDiscs(() => {
+              this.sceneCtrl.clearWinEffects();
+              this.engine.reset(P1);
+              this.sceneCtrl.clearBoardDiscs();
+              this.sceneCtrl.resetCamera();
+              this.sound.playTransitionSweep(true);
+              this.isTransitioning = false;
+              this.setTransitionOverlay(false);
+              this.updateHUD();
+              this.setOnlineStatus(`Round ${this.onlineRound} is on. ${room.hostName} starts as Red.`);
+            });
+          });
         }
 
         async drainOnlineMoves() {
@@ -3211,7 +3300,17 @@
             this.onlineMovePending = false;
             if (latest?.status === 'waiting') this.setOnlineStatus(`Room ${this.onlineRoomCode} is ready. Waiting for another player to join…`);
             else if (latest?.status === 'playing') this.setOnlineStatus('Connected. Your room is live.');
-            else if (latest?.status === 'finished') this.setOnlineStatus('This room’s game is finished. Create a new room to play again.');
+            else if (latest?.status === 'finished') {
+              const userUid = auth?.currentUser?.uid;
+              const isHost = userUid === latest.hostUid;
+              const ownReady = isHost ? latest.hostRematchReady === true : latest.guestRematchReady === true;
+              const otherReady = isHost ? latest.guestRematchReady === true : latest.hostRematchReady === true;
+              this.setOnlineStatus(ownReady
+                ? 'Rematch requested. Waiting for the other player to accept…'
+                : otherReady
+                  ? 'The other player wants a rematch. Accept it on the game-over banner.'
+                  : 'Game finished. Choose Rematch to play again together.');
+            }
             this.updateHUD();
           } catch (error) {
             this.onlineMovePending = false;
@@ -3681,7 +3780,18 @@
             this.newGameBtn.disabled = this.mode === 'online' || this.isTransitioning;
           }
           if (this.playAgainBtn) {
-            this.playAgainBtn.disabled = this.mode === 'online' || this.isTransitioning;
+            if (this.mode === 'online') {
+              const room = this.onlineRoomData;
+              const uid = auth?.currentUser?.uid;
+              const isHost = uid && uid === room?.hostUid;
+              const ownReady = isHost ? room?.hostRematchReady === true : room?.guestRematchReady === true;
+              const otherReady = isHost ? room?.guestRematchReady === true : room?.hostRematchReady === true;
+              this.playAgainBtn.textContent = ownReady ? 'Waiting for Opponent…' : otherReady ? 'Accept Rematch' : 'Rematch';
+              this.playAgainBtn.disabled = !uid || room?.status !== 'finished' || ownReady || this.onlineRematchPending || this.isTransitioning;
+            } else {
+              this.playAgainBtn.textContent = 'Play Again';
+              this.playAgainBtn.disabled = this.isTransitioning;
+            }
           }
         }
 
@@ -3824,7 +3934,10 @@
             this.newGameBtn.addEventListener('click', () => this.startNewGame(false));
           }
           if (this.playAgainBtn) {
-            this.playAgainBtn.addEventListener('click', () => this.startNewGame(false));
+            this.playAgainBtn.addEventListener('click', () => {
+              if (this.mode === 'online') this.requestOnlineRematch();
+              else this.startNewGame(false);
+            });
           }
 
           if (this.resetScoresBtn) {
@@ -3892,7 +4005,8 @@
             } else if (e.key === 'Enter' || e.key === ' ') {
               if (!this.gameOverModal.classList.contains('hidden')) {
                 e.preventDefault();
-                this.startNewGame(false);
+                if (this.mode === 'online') this.requestOnlineRematch();
+                else this.startNewGame(false);
                 return;
               }
               if (this.isHumanTurn()) {
