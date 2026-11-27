@@ -2932,6 +2932,10 @@
           if (this.onlineJoinRoomBtn) this.onlineJoinRoomBtn.disabled = busy;
         }
 
+        logOnlineJoin(stage, details = {}) {
+          console.info('[Connect 4 online join]', stage, details);
+        }
+
         getTemporaryRoomName() {
           let profile = null;
           try { profile = getActiveProfile(); } catch {}
@@ -3017,18 +3021,28 @@
           }
           this.setOnlineBusy(true);
           this.setOnlineStatus('Looking for that room…');
+          let stage = 'firebase-auth';
           try {
             const { user, name } = await this.getOnlineIdentity();
+            this.logOnlineJoin('authenticated', { anonymous: user.isAnonymous, codeLength: code.length });
             const roomRef = ref(realtimeDb, `connect4Rooms/${code}`);
             // A joining device may have no local cache for this path. Read the
             // room first so the transaction updater starts from the server state
             // instead of aborting immediately on an initial null cache value.
+            stage = 'room-read';
             const roomSnapshot = await get(roomRef);
+            const roomBeforeJoin = roomSnapshot.val();
+            this.logOnlineJoin('room-read-result', {
+              exists: roomSnapshot.exists(),
+              status: roomBeforeJoin?.status ?? null,
+              hasGuest: Boolean(roomBeforeJoin?.guestUid),
+              moveCount: Number.isFinite(Number(roomBeforeJoin?.moveCount)) ? Number(roomBeforeJoin.moveCount) : null,
+              sameAccountAsHost: Boolean(roomBeforeJoin?.hostUid && roomBeforeJoin.hostUid === user.uid)
+            });
             if (!roomSnapshot.exists()) {
               this.setOnlineStatus('No room was found with that code. Check the code and try again.', true);
               return;
             }
-            const roomBeforeJoin = roomSnapshot.val();
             if (roomBeforeJoin?.hostUid === user.uid) {
               this.setOnlineStatus('You are already hosting this room. Join from a different account or device.', true);
               return;
@@ -3037,8 +3051,36 @@
               this.setOnlineStatus('That room is already full or the game has started.', true);
               return;
             }
+            stage = 'join-transaction';
+            let transactionAttempts = 0;
+            let abortReason = null;
             const result = await runTransaction(roomRef, (current) => {
-              if (!current || current.status !== 'waiting' || current.guestUid || current.hostUid === user.uid) return;
+              transactionAttempts++;
+              const state = {
+                attempt: transactionAttempts,
+                currentExists: Boolean(current),
+                status: current?.status ?? null,
+                hasGuest: Boolean(current?.guestUid),
+                sameAccountAsHost: Boolean(current?.hostUid && current.hostUid === user.uid),
+                moveCount: Number.isFinite(Number(current?.moveCount)) ? Number(current.moveCount) : null
+              };
+              this.logOnlineJoin('transaction-current', state);
+              if (!current) {
+                abortReason = 'room-missing';
+                return;
+              }
+              if (current.status !== 'waiting') {
+                abortReason = 'room-not-waiting';
+                return;
+              }
+              if (current.guestUid) {
+                abortReason = 'room-has-guest';
+                return;
+              }
+              if (current.hostUid === user.uid) {
+                abortReason = 'same-account-as-host';
+                return;
+              }
               return {
                 ...current,
                 guestUid: user.uid,
@@ -3048,9 +3090,25 @@
                 updatedAt: Date.now()
               };
             }, { applyLocally: false });
+            this.logOnlineJoin('transaction-result', {
+              committed: result.committed,
+              attempts: transactionAttempts,
+              abortReason,
+              status: result.snapshot.val()?.status ?? null,
+              hasGuest: Boolean(result.snapshot.val()?.guestUid)
+            });
 
             if (!result.committed) {
-              this.setOnlineStatus('That room is unavailable, already full, or you are already its host.', true);
+              const message = abortReason === 'same-account-as-host'
+                ? 'This device is signed in as the room host. Use another Firebase account to join.'
+                : abortReason === 'room-has-guest'
+                  ? 'That room already has a guest.'
+                  : abortReason === 'room-not-waiting'
+                    ? 'That room is no longer waiting for a player.'
+                    : abortReason === 'room-missing'
+                      ? 'The room could not be loaded by the transaction. Check the room code and database connection.'
+                      : 'The room changed while you were joining. Refresh and try again.';
+              this.setOnlineStatus(message, true);
               return;
             }
 
@@ -3063,6 +3121,11 @@
             this.listenToOnlineRoom(roomRef, code);
             this.setOnlineStatus('Joined. Starting the match…');
           } catch (error) {
+            this.logOnlineJoin('error', {
+              stage,
+              code: error?.code || null,
+              message: error?.message || String(error)
+            });
             this.setOnlineStatus(this.onlineErrorMessage(error, true), true);
           } finally {
             this.setOnlineBusy(false);
