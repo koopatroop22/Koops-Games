@@ -151,6 +151,20 @@
         .review-move-row:hover { background: rgba(255, 255, 255, 0.08); }
         .review-move-row.review-selected { background: rgba(120, 178, 94, 0.24); box-shadow: inset 2px 0 #8bc66b; }
 
+        .move-feedback-sprite {
+            display: inline-block;
+            flex: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-image: url('Images/move-feedback-spritesheet.jpg');
+            background-repeat: no-repeat;
+            background-size: 800% 100%;
+            vertical-align: middle;
+        }
+
+        .move-feedback-sprite.sprite-small { width: 16px; height: 16px; }
+
         @media (max-width: 760px) {
             .review-overlay { background: rgba(7, 10, 16, 0.2); }
             .review-panel { inset: 0 0 0 auto; width: min(100%, 430px); min-width: 0; border-radius: 0; }
@@ -810,6 +824,7 @@
         let stockfishSearchResolve = null;
         let stockfishSearchReject = null;
         let stockfishSearchScore = null;
+        let stockfishMultiPvScores = {};
         let stockfishQueue = Promise.resolve();
 
         function setEngineStatus(message, isError = false) {
@@ -869,9 +884,13 @@
             const scoreMatch = line.match(/\bscore\s+(cp|mate)\s+(-?\d+)/);
             if (scoreMatch) {
                 const value = Number(scoreMatch[2]);
-                stockfishSearchScore = scoreMatch[1] === 'mate'
+                const score = scoreMatch[1] === 'mate'
                     ? Math.sign(value || 1) * (100000 - Math.min(99, Math.abs(value)) * 1000)
                     : value;
+                const pvMatch = line.match(/\bmultipv\s+(\d+)/);
+                const pv = pvMatch ? Number(pvMatch[1]) : 1;
+                stockfishMultiPvScores[pv] = score;
+                if (pv === 1) stockfishSearchScore = score;
             }
 
             const bestMoveMatch = line.match(/^bestmove\s+(\S+)/);
@@ -879,16 +898,17 @@
                 const resolve = stockfishSearchResolve;
                 stockfishSearchResolve = null;
                 stockfishSearchReject = null;
-                resolve({ bestMove: bestMoveMatch[1], score: stockfishSearchScore });
+                resolve({ bestMove: bestMoveMatch[1], score: stockfishSearchScore, scores: { ...stockfishMultiPvScores } });
             }
         }
 
-        async function stockfishSearch(moves, { depth = 10, skill = 20 } = {}) {
+        async function stockfishSearch(moves, { depth = 10, skill = 20, multiPv = 1 } = {}) {
             await initializeStockfish();
             stockfishWorker.postMessage(`setoption name Skill Level value ${skill}`);
-            stockfishWorker.postMessage('setoption name MultiPV value 1');
+            stockfishWorker.postMessage(`setoption name MultiPV value ${multiPv}`);
             stockfishWorker.postMessage(`position startpos${moves.length ? ` moves ${moves.join(' ')}` : ''}`);
             stockfishSearchScore = null;
+            stockfishMultiPvScores = {};
             return new Promise((resolve, reject) => {
                 stockfishSearchResolve = resolve;
                 stockfishSearchReject = reject;
@@ -910,12 +930,25 @@
             return getLegalMoves(state, state.turn).find(move => moveToUci(move) === uci) || null;
         }
 
-        function rateMoveLoss(cpLoss) {
+        function rateMoveLoss(cpLoss, { brilliant = false, great = false } = {}) {
+            if (brilliant) return { name: 'Brilliant', style: 'text-fuchsia-200 bg-fuchsia-400/10 border-fuchsia-300/25' };
+            if (great) return { name: 'Great', style: 'text-violet-200 bg-violet-400/10 border-violet-300/25' };
             if (cpLoss <= 15) return { name: 'Best', style: 'text-emerald-200 bg-emerald-400/10 border-emerald-300/20' };
             if (cpLoss <= 45) return { name: 'Good', style: 'text-sky-200 bg-sky-400/10 border-sky-300/20' };
             if (cpLoss <= 100) return { name: 'Inaccuracy', style: 'text-amber-200 bg-amber-400/10 border-amber-300/20' };
             if (cpLoss <= 200) return { name: 'Mistake', style: 'text-orange-200 bg-orange-400/10 border-orange-300/20' };
             return { name: 'Blunder', style: 'text-rose-200 bg-rose-400/10 border-rose-300/20' };
+        }
+
+        function isSoundPieceSacrifice(record) {
+            const move = record.move;
+            if (!move || !['n', 'b', 'r', 'q'].includes(move.piece)) return false;
+            const pieceValue = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+            const afterMove = applyMoveToState(record.state, move);
+            return getLegalMoves(afterMove, afterMove.turn).some(reply =>
+                reply.to.r === move.to.r && reply.to.c === move.to.c && reply.captured &&
+                pieceValue[reply.piece] < pieceValue[move.piece]
+            );
         }
 
         function formatReviewEval(cp) {
@@ -928,11 +961,31 @@
             return `${cp > 0 ? '+' : cp < 0 ? '−' : ''}${pawns.toFixed(1)}`;
         }
 
+        const REVIEW_SPRITES = {
+            Blunder: { index: 0, label: 'Blunder' },
+            Mistake: { index: 1, label: 'Mistake' },
+            Inaccuracy: { index: 2, label: 'Inaccuracy' },
+            Best: { index: 5, label: 'Best' },
+            Good: { index: 4, label: 'Good' },
+            Great: { index: 6, label: 'Great' },
+            Brilliant: { index: 7, label: 'Brilliant' },
+            Equal: { index: 3, label: 'Equal position' }
+        };
+
+        function feedbackSprite(rating, small = false) {
+            const sprite = REVIEW_SPRITES[rating];
+            if (!sprite) return '';
+            const position = (sprite.index / 7) * 100;
+            return `<span class="move-feedback-sprite${small ? ' sprite-small' : ''}" style="background-position:${position}% center" role="img" aria-label="${sprite.label}" title="${sprite.label}"></span>`;
+        }
+
         function reviewFeedback(review) {
             if (!review) return '';
             const bestMove = review.bestSan && review.bestSan !== '—'
                 ? `Engine preferred <strong class="text-white">${review.bestSan}</strong>. `
                 : '';
+            if (review.rating === 'Brilliant') return `${bestMove}A sound piece sacrifice. Stockfish confirms the compensation makes it work.`;
+            if (review.rating === 'Great') return `${bestMove}A standout move. The other engine choices lose significantly more.`;
             if (review.rating === 'Best') return `${bestMove}This move keeps the position at its strongest.`;
             if (review.rating === 'Good') return `${bestMove}A sound choice with only a small change in the position.`;
             if (review.rating === 'Inaccuracy') return `${bestMove}A better continuation was available; this move lets the evaluation shift against you.`;
@@ -1697,8 +1750,8 @@
                     const blackReview = app.historyStack[i + 1]?.review;
                     html += `<div class="flex items-center justify-between py-0.5 px-1.5 rounded hover:bg-slate-800/70">
                         <span class="text-slate-500 w-7">${moveNum}.</span>
-                        <span class="text-amber-100 font-medium flex-1">${wSan}${whiteReview ? ` <small class="text-[9px] text-emerald-300">${whiteReview.rating}</small>` : ''}</span>
-                        <span class="text-sky-200 font-medium flex-1 text-right">${bSan}${blackReview ? ` <small class="text-[9px] text-emerald-300">${blackReview.rating}</small>` : ''}</span>
+                        <span class="text-amber-100 font-medium flex-1">${whiteReview ? `${feedbackSprite(whiteReview.rating, true)} ` : ''}${wSan}</span>
+                        <span class="text-sky-200 font-medium flex-1 text-right">${blackReview ? `${feedbackSprite(blackReview.rating, true)} ` : ''}${bSan}</span>
                     </div>`;
                 }
                 listEl.innerHTML = html;
@@ -1819,8 +1872,8 @@
             let rows = '';
             for (let i = 0; i < records.length; i += 2) {
                 const white = records[i], black = records[i + 1];
-                const wb = white.review ? `<span class="text-[9px] ml-1 ${white.review.style.split(' ')[0]}">${white.review.rating}</span>` : '';
-                const bb = black?.review ? `<span class="text-[9px] ml-1 ${black.review.style.split(' ')[0]}">${black.review.rating}</span>` : '';
+                const wb = white.review ? ` ${feedbackSprite(white.review.rating, true)}` : '';
+                const bb = black?.review ? ` ${feedbackSprite(black.review.rating, true)}` : '';
                 rows += `<div class="grid grid-cols-[28px_1fr_1fr] items-center gap-1 mb-1">
                     <span class="text-slate-500 text-[10px]">${Math.floor(i / 2) + 1}.</span>
                     <button onclick="navigateReview(${i + 1})" class="review-move-row ${app.reviewPly === i + 1 ? 'review-selected' : ''} rounded-md text-left px-2 py-1 text-amber-100">${white.san}${wb}</button>
@@ -1841,12 +1894,12 @@
             document.getElementById('review-ply-label').textContent = `${app.reviewPly} / ${app.historyStack.length}`;
             const selected = app.reviewPly > 0 ? app.historyStack[app.reviewPly - 1] : null;
             const review = selected?.review;
-            document.getElementById('review-current-rating').textContent = selected
-                ? `${Math.floor((app.reviewPly - 1) / 2) + 1}${app.reviewPly % 2 ? '.' : '…'} ${selected.san}${review ? ` · ${review.rating}` : ''}`
+            document.getElementById('review-current-rating').innerHTML = selected
+                ? `${review ? feedbackSprite(review.rating) : ''}<span>${Math.floor((app.reviewPly - 1) / 2) + 1}${app.reviewPly % 2 ? '.' : '…'} ${selected.san}${review ? ` · ${review.rating}` : ''}</span>`
                 : 'Starting position';
             const evalCp = review ? review.afterWhite : (app.historyStack[0]?.review?.beforeWhite ?? null);
-            document.getElementById('review-current-eval').textContent = Number.isFinite(evalCp)
-                ? `${formatReviewEval(evalCp)} ${evalCp >= 0 ? 'White' : 'Black'}` : '—';
+            document.getElementById('review-current-eval').innerHTML = Number.isFinite(evalCp)
+                ? `${Math.abs(evalCp) <= 15 ? feedbackSprite('Equal', true) : ''} ${formatReviewEval(evalCp)} ${evalCp >= 0 ? 'White' : 'Black'}` : '—';
             document.getElementById('review-current-feedback').innerHTML = review
                 ? reviewFeedback(review)
                 : 'Run Stockfish analysis to see move quality, evaluation changes and the recommended continuation.';
@@ -1913,7 +1966,7 @@
                     for (let index = 0; index < moves.length; index++) {
                         if (app.reviewToken !== runToken) return;
                         document.getElementById('review-status').textContent = `Reviewing move ${index + 1} of ${moves.length}…`;
-                        const before = await stockfishSearch(moves.slice(0, index), { depth: 12, skill: 20 });
+                        const before = await stockfishSearch(moves.slice(0, index), { depth: 12, skill: 20, multiPv: 2 });
                         if (app.reviewToken !== runToken || !Number.isFinite(before.score)) return;
                         const record = app.historyStack[index];
                         let loss = 0;
@@ -1924,7 +1977,13 @@
                             loss = Math.max(0, before.score + after.score);
                             afterScore = after.score;
                         }
-                        const assessment = rateMoveLoss(loss);
+                        const playedUci = record.uci || moveToUci(record.move);
+                        const playedBest = playedUci === before.bestMove;
+                        const secondScore = before.scores?.[2];
+                        const bestMoveGap = Number.isFinite(secondScore) ? before.score - secondScore : 0;
+                        const brilliant = playedBest && loss <= 15 && isSoundPieceSacrifice(record);
+                        const great = !brilliant && playedBest && loss <= 15 && bestMoveGap >= 180;
+                        const assessment = rateMoveLoss(loss, { brilliant, great });
                         const bestMove = findLegalMoveByUci(record.state, before.bestMove);
                         const bestSan = bestMove ? formatAlgebraic(record.state, bestMove) : '—';
                         const beforeWhite = record.state.turn === 'w' ? before.score : -before.score;
