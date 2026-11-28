@@ -124,6 +124,29 @@
     @media (prefers-reduced-motion: reduce) {
       #hub-loading-screen { transition-duration: 1ms; }
     }
+
+    #updates-modal .updates-panel {
+      opacity:  0;
+      transform: translateY(14px) scale(.985);
+      transition: opacity .24s ease, transform .24s cubic-bezier(.22, 1, .36, 1);
+    }
+    #updates-modal.is-open .updates-panel {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .update-release.is-entering {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .update-release {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity .22s ease, transform .22s ease;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #updates-modal .updates-panel,
+      .update-release { transition-duration: 1ms; }
+    }
   </style>
 </head>
 <body class="font-sans bg-lounge-dark text-stone-100 transition-colors duration-500">
@@ -180,6 +203,13 @@
 
         <!-- Mobile Right Controls (Theme + Account) -->
         <div class="flex lg:hidden items-center gap-2">
+          <button id="btn-updates-mobile" aria-label="What's New"
+            class="glass-panel relative p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-amber-500/30 text-stone-800 dark:text-amber-200 hover:border-amber-500/60 shadow-md">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.5a6.5 6.5 0 0 0 6.5-6.5V9a6.5 6.5 0 0 0-13 0v3a6.5 6.5 0 0 0 6.5 6.5ZM9.5 21h5M4.5 10.5H3m18 0h-1.5M6.2 4.7 5.1 3.6m12.7 1.1 1.1-1.1" />
+            </svg>
+            <span class="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose-500 dark:border-stone-900"></span>
+          </button>
           <button id="btn-account-mobile" aria-label="Player Accounts"
             class="glass-panel p-2.5 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-stone-200 hover:border-amber-500/50 shadow-md">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -220,10 +250,23 @@
           class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
           Card Games <span class="font-mono text-[11px] opacity-70 ml-1">(1 · 18+)</span>
         </button>
+        <button id="btn-community-nav" data-category="community"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-teal-500/40 bg-teal-500/15 text-teal-800 dark:text-teal-200 hover:border-teal-400">
+          Community Area <span id="comm-nav-badge" class="font-mono text-[11px] opacity-85 ml-1">(0 Lobbies)</span>
+        </button>
       </nav>
 
       <!-- Right: Desktop Controls -->
       <div class="hidden lg:flex items-center gap-2.5">
+        <button id="btn-updates-desktop"
+          class="glass-panel flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 hover:border-amber-500/60 text-xs font-semibold shadow-md">
+          <span class="relative flex h-2 w-2">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-60"></span>
+            <span class="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+          </span>
+          <span>What’s New</span>
+          <span class="rounded-md bg-rose-500 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-white">New</span>
+        </button>
         <button id="btn-account-desktop"
           class="glass-panel flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-stone-900/75 border border-stone-300/70 dark:border-white/10 text-stone-800 dark:text-stone-200 hover:border-amber-500/60 text-xs font-semibold shadow-md">
           <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -356,6 +399,95 @@
     </footer>
   </div>
 
+  <!-- GAME UPDATE LOG -->
+  <div id="updates-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 p-3 backdrop-blur-md sm:p-6"
+    role="dialog" aria-modal="true" aria-labelledby="updates-title" aria-hidden="true">
+    <div class="updates-panel glass-panel flex max-h-[min(760px,calc(100vh-1.5rem))] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-amber-500/30 bg-stone-100 shadow-2xl dark:bg-stone-950 sm:max-h-[min(760px,calc(100vh-3rem))]">
+      <div class="flex items-center justify-between gap-4 border-b border-stone-300/70 px-5 py-4 dark:border-white/10 sm:px-7 sm:py-5">
+        <div>
+          <div class="font-mono text-[10px] font-semibold uppercase tracking-[.22em] text-amber-700 dark:text-amber-300">Koops Games · Release notes</div>
+          <h2 id="updates-title" class="mt-1 font-display text-2xl font-bold text-stone-900 dark:text-white sm:text-3xl">What’s new</h2>
+        </div>
+        <button id="btn-close-updates" type="button" aria-label="Close update log"
+          class="rounded-xl border border-stone-300/70 bg-white/70 p-2 text-stone-600 transition hover:border-rose-400/60 hover:bg-rose-500/10 hover:text-rose-500 dark:border-white/10 dark:bg-white/5 dark:text-stone-300">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto sm:grid-cols-[190px_minmax(0,1fr)] sm:overflow-hidden">
+        <nav id="update-version-list" aria-label="Update versions"
+          class="no-scrollbar flex gap-2 overflow-x-auto border-b border-stone-300/70 bg-stone-200/50 p-3 dark:border-white/10 dark:bg-white/[.025] sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-4">
+          <button type="button" data-update-version="1.4.0" aria-pressed="true"
+            class="update-version shrink-0 rounded-2xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-3 text-left transition hover:border-amber-500/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 sm:w-full">
+            <span class="flex items-center justify-between gap-2"><span class="font-mono text-sm font-bold text-amber-800 dark:text-amber-200">v1.4.0</span><span class="rounded bg-rose-500 px-1.5 py-0.5 font-mono text-[8px] uppercase text-white">Latest</span></span>
+            <span class="mt-1 block text-[11px] text-stone-600 dark:text-stone-400">Room invites</span>
+          </button>
+          <button type="button" data-update-version="1.3.0" aria-pressed="false"
+            class="update-version shrink-0 rounded-2xl border border-stone-300/70 bg-white/50 px-3.5 py-3 text-left transition hover:border-amber-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 dark:border-white/10 dark:bg-white/[.025] sm:w-full">
+            <span class="block font-mono text-sm font-bold text-stone-700 dark:text-stone-200">v1.3.0</span>
+            <span class="mt-1 block text-[11px] text-stone-500 dark:text-stone-400">Room sync &amp; access</span>
+          </button>
+          <button type="button" data-update-version="1.2.0" aria-pressed="false"
+            class="update-version shrink-0 rounded-2xl border border-stone-300/70 bg-white/50 px-3.5 py-3 text-left transition hover:border-amber-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 dark:border-white/10 dark:bg-white/[.025] sm:w-full">
+            <span class="block font-mono text-sm font-bold text-stone-700 dark:text-stone-200">v1.2.0</span>
+            <span class="mt-1 block text-[11px] text-stone-500 dark:text-stone-400">Online room fixes</span>
+          </button>
+          <button type="button" data-update-version="1.1.0" aria-pressed="false"
+            class="update-version shrink-0 rounded-2xl border border-stone-300/70 bg-white/50 px-3.5 py-3 text-left transition hover:border-amber-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 dark:border-white/10 dark:bg-white/[.025] sm:w-full">
+            <span class="block font-mono text-sm font-bold text-stone-700 dark:text-stone-200">v1.1.0</span>
+            <span class="mt-1 block text-[11px] text-stone-500 dark:text-stone-400">Monopoly online</span>
+          </button>
+        </nav>
+
+        <div id="update-release-content" class="min-h-0 overflow-y-auto p-5 sm:p-7" aria-live="polite">
+          <article class="update-release" data-release="1.4.0" tabindex="-1">
+            <div class="font-mono text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-300">27 November 2026 · Online multiplayer</div>
+            <h3 class="mt-2 font-display text-2xl font-bold text-stone-900 dark:text-white sm:text-3xl">Bring your friends to the table</h3>
+            <p class="mt-2 max-w-xl text-sm leading-relaxed text-stone-600 dark:text-stone-300">Invite friends into online rooms with shareable links, so it’s easier to get a match started.</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-emerald-600 dark:text-emerald-400">✦</span><span>Added invite links for Monopoly and Connect 4 rooms.</span></li>
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-emerald-600 dark:text-emerald-400">✦</span><span>Room codes can be shared directly with the other players.</span></li>
+            </ul>
+            <div class="mt-7 rounded-2xl border border-emerald-500/20 bg-emerald-500/[.07] p-4 text-xs leading-relaxed text-stone-600 dark:text-stone-300">Tip: open an online room and use its invite option to send the link to a friend.</div>
+          </article>
+          <article class="update-release hidden" data-release="1.3.0" tabindex="-1">
+            <div class="font-mono text-[10px] font-semibold uppercase tracking-[.18em] text-sky-700 dark:text-sky-300">27 November 2026 · Multiplayer reliability</div>
+            <h3 class="mt-2 font-display text-2xl font-bold text-stone-900 dark:text-white sm:text-3xl">More reliable shared games</h3>
+            <p class="mt-2 max-w-xl text-sm leading-relaxed text-stone-600 dark:text-stone-300">Online Monopoly rooms now track state updates with player identity, alongside clearer access rules for room members.</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-sky-600 dark:text-sky-400">✦</span><span>Improved synchronization and identification of room updates.</span></li>
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-sky-600 dark:text-sky-400">✦</span><span>Refined room access so players can participate in their own match.</span></li>
+            </ul>
+          </article>
+          <article class="update-release hidden" data-release="1.2.0" tabindex="-1">
+            <div class="font-mono text-[10px] font-semibold uppercase tracking-[.18em] text-violet-700 dark:text-violet-300">27 November 2026 · Fixes &amp; polish</div>
+            <h3 class="mt-2 font-display text-2xl font-bold text-stone-900 dark:text-white sm:text-3xl">Smoother room setup</h3>
+            <p class="mt-2 max-w-xl text-sm leading-relaxed text-stone-600 dark:text-stone-300">We improved online room creation and joining so it’s easier to understand what’s happening when you connect.</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-violet-600 dark:text-violet-400">✦</span><span>Added clearer feedback for room creation and permission problems.</span></li>
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-violet-600 dark:text-violet-400">✦</span><span>Improved room code validation and joining checks.</span></li>
+            </ul>
+          </article>
+          <article class="update-release hidden" data-release="1.1.0" tabindex="-1">
+            <div class="font-mono text-[10px] font-semibold uppercase tracking-[.18em] text-amber-700 dark:text-amber-300">27 November 2026 · New game mode</div>
+            <h3 class="mt-2 font-display text-2xl font-bold text-stone-900 dark:text-white sm:text-3xl">Monopoly goes online</h3>
+            <p class="mt-2 max-w-xl text-sm leading-relaxed text-stone-600 dark:text-stone-300">The first online Monopoly rooms arrived, letting players create a room or join a friend’s game.</p>
+            <ul class="mt-6 space-y-3">
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-amber-600 dark:text-amber-400">✦</span><span>Create or join a multiplayer room using a room code.</span></li>
+              <li class="flex gap-3 text-sm leading-relaxed text-stone-700 dark:text-stone-200"><span class="mt-0.5 text-amber-600 dark:text-amber-400">✦</span><span>Added player presence and shared game state for online matches.</span></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+      <div class="flex items-center justify-between border-t border-stone-300/70 px-5 py-3 dark:border-white/10 sm:px-7">
+        <span class="font-mono text-[9px] uppercase tracking-[.16em] text-stone-500 dark:text-stone-400">More good times, one update at a time</span>
+        <span class="font-mono text-[9px] text-stone-400 dark:text-stone-500">KOOPS GAMES</span>
+      </div>
+    </div>
+  </div>
+
   <!-- PLAYER ACCOUNTS MODAL -->
   <div id="account-modal" class="fixed inset-0 z-40 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
     <div class="glass-panel w-full max-w-md rounded-3xl p-6 bg-white dark:bg-stone-900 border border-stone-300 dark:border-white/15 shadow-2xl text-stone-900 dark:text-white">
@@ -422,6 +554,7 @@
       <p id="launch-description" class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
         Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.
       </p>
+      <a href="terms.html" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs font-semibold text-amber-700 underline dark:text-amber-300">Read the full Terms &amp; Conditions</a>
       <p id="launch-safety-note" class="hidden text-xs text-amber-800 dark:text-amber-200 mt-3 leading-relaxed rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
         Poker is a gambling-style game. This version is for adults 18+ and uses free-play virtual chips only. No real-money betting, purchases, prizes, cash-out, or transfer of chips.
       </p>
@@ -437,6 +570,9 @@
       </div>
     </div>
   </div>
+
+  <!-- TEMPORARY COMMUNITY AREA & LOBBY HALL MODULE -->
+  <script src="community-hub.js"></script>
 
   <!-- MAIN THREE.JS & INTERACTIVE APPLICATION SCRIPT -->
   <script>
@@ -596,6 +732,10 @@
         cards: {
           pos: new THREE.Vector3(11.5, 11.5, 17.5),
           target: new THREE.Vector3(11.5, 1.0, 8.5)
+        },
+        community: {
+          pos: new THREE.Vector3(11.5, 10.2, -2.2),
+          target: new THREE.Vector3(11.5, 1.8, -13.5)
         }
       };
 
@@ -611,6 +751,8 @@
         activeCategory: 'all',
         selectedGameId: null,
         hoveredGameId: null,
+        selectedAreaId: null,
+        hoveredAreaId: null,
         inspectedIds: new Set(['monopoly']),
         directoryOpen: true,
         // Camera interpolation state
@@ -1402,6 +1544,38 @@
         };
       });
 
+      const communityArea = window.KoopsCommunityHub.createCommunityArea3D({
+        scene,
+        THREE,
+        raycastTargets,
+        showHubIntro
+      });
+
+      const communityHubUI = window.KoopsCommunityHub.initCommunityHubUI({
+        getPlayerName: () => document.getElementById('player-name-input')?.value || 'KoopaTroop22',
+        onOpenCommunity: () => {
+          state.selectedAreaId = 'community';
+          updateDirectoryActiveState();
+        },
+        onCloseCommunity: () => {
+          state.selectedAreaId = null;
+          updateDirectoryActiveState();
+        },
+        onCountChange: (count) => {
+          const badge = document.getElementById('comm-nav-badge');
+          if (badge) badge.textContent = `(${count} Live)`;
+        }
+      });
+
+      function openCommunityBuilding() {
+        closeDetailCard();
+        state.selectedAreaId = 'community';
+        state.desiredTarget.set(communityArea.position.x, 1.8, communityArea.position.z);
+        state.desiredCamPos.set(communityArea.camOffset.x, communityArea.camOffset.y, communityArea.camOffset.z);
+        state.isTransitioning = true;
+        Promise.resolve(communityHubUI).then((ctrl) => ctrl?.openModal());
+      }
+
       // A small Three.js parlor emblem animates during the first-visit intro.
       const hubIntroGroup = new THREE.Group();
       hubIntroGroup.position.set(0, 3.4, 0);
@@ -1452,6 +1626,7 @@
           obj.hitBox.visible = true;
           obj.spawnStartAt = startAt + index * 0.095;
         });
+        communityArea.spawn(startAt + GAMES.length * 0.095);
         if (hubLoadingScreen) {
           hubLoadingScreen.classList.add('is-leaving');
           setTimeout(() => hubLoadingScreen.remove(), 700);
@@ -1485,21 +1660,36 @@
         const hits = raycaster.intersectObjects(raycastTargets, false);
 
         if (hits.length > 0) {
-          const hitGameId = hits[0].object.userData.gameId;
-          state.hoveredGameId = hitGameId;
-          renderer.domElement.style.cursor = 'pointer';
-
-          const game = GAMES.find((g) => g.id === hitGameId);
-          if (game) {
-            hoverTitle.textContent = game.title;
-            hoverMeta.textContent = game.tag;
-            hoverDot.className = `w-2.5 h-2.5 rounded-full animate-pulse-soft ${game.dotClass}`;
+          const hitObj = hits[0].object;
+          if (hitObj.userData.hubAreaId === 'community') {
+            state.hoveredGameId = null;
+            state.hoveredAreaId = 'community';
+            renderer.domElement.style.cursor = 'pointer';
+            hoverTitle.textContent = 'Community Lobby Hall';
+            hoverMeta.textContent = 'TEMP ONLINE AREA · CLICK TO BROWSE OR CREATE LOBBY';
+            hoverDot.className = 'w-2.5 h-2.5 rounded-full animate-pulse-soft bg-teal-400';
             hoverPill.style.left = `${e.clientX}px`;
             hoverPill.style.top = `${e.clientY}px`;
             hoverPill.classList.remove('opacity-0');
+          } else {
+            const hitGameId = hitObj.userData.gameId;
+            state.hoveredAreaId = null;
+            state.hoveredGameId = hitGameId;
+            renderer.domElement.style.cursor = 'pointer';
+
+            const game = GAMES.find((g) => g.id === hitGameId);
+            if (game) {
+              hoverTitle.textContent = game.title;
+              hoverMeta.textContent = game.tag;
+              hoverDot.className = `w-2.5 h-2.5 rounded-full animate-pulse-soft ${game.dotClass}`;
+              hoverPill.style.left = `${e.clientX}px`;
+              hoverPill.style.top = `${e.clientY}px`;
+              hoverPill.classList.remove('opacity-0');
+            }
           }
         } else {
           state.hoveredGameId = null;
+          state.hoveredAreaId = null;
           renderer.domElement.style.cursor = 'grab';
           hoverPill.classList.add('opacity-0');
         }
@@ -1517,7 +1707,12 @@
           raycaster.setFromCamera(pointer, camera);
           const hits = raycaster.intersectObjects(raycastTargets, false);
           if (hits.length > 0) {
-            selectGameTable(hits[0].object.userData.gameId);
+            const hitObj = hits[0].object;
+            if (hitObj.userData.hubAreaId === 'community') {
+              openCommunityBuilding();
+            } else if (hitObj.userData.gameId) {
+              selectGameTable(hitObj.userData.gameId);
+            }
           }
         }
       });
@@ -1540,6 +1735,7 @@
         const game = GAMES.find((g) => g.id === gameId);
         if (!game) return;
 
+        state.selectedAreaId = null;
         state.selectedGameId = game.id;
         state.inspectedIds.add(game.id);
         document.getElementById('stat-visited').textContent = `${state.inspectedIds.size} / ${GAMES.length}`;
@@ -1621,9 +1817,11 @@
         const filtered =
           state.activeCategory === 'all'
             ? GAMES
-            : GAMES.filter((g) => g.category === state.activeCategory);
+            : state.activeCategory === 'community'
+              ? []
+              : GAMES.filter((g) => g.category === state.activeCategory);
 
-        directoryContainer.innerHTML = filtered
+        const gameCardsHtml = filtered
           .map((game) => {
             const isSelected = state.selectedGameId === game.id;
             return `
@@ -1647,10 +1845,39 @@
           })
           .join('');
 
+        const showCommunityCard = state.activeCategory === 'all' || state.activeCategory === 'community';
+        const isCommunitySelected = state.selectedAreaId === 'community';
+        const communityCardHtml = showCommunityCard
+          ? `
+            <button data-hub-area="community"
+              class="dir-community-card glass-panel shrink-0 w-52 sm:w-56 p-3 rounded-2xl text-left border transition-all ${
+                isCommunitySelected
+                  ? 'bg-teal-500/20 border-teal-400 shadow-lg shadow-teal-500/20'
+                  : 'bg-teal-500/10 dark:bg-teal-950/50 border-teal-500/35 hover:border-teal-400'
+              }">
+              <div class="flex items-center justify-between gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse-soft"></span>
+                <span class="font-mono text-[9px] uppercase tracking-wider text-teal-700 dark:text-teal-300 truncate">TEMP · ONLINE HUB</span>
+              </div>
+              <div class="font-display font-bold text-sm text-stone-900 dark:text-white mt-1.5 truncate">Community Lobby Hall</div>
+              <div class="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-1 flex items-center justify-between">
+                <span>Browse / Create Lobby</span>
+                <span>→</span>
+              </div>
+            </button>
+          `
+          : '';
+
+        directoryContainer.innerHTML = communityCardHtml + gameCardsHtml;
+
         document.querySelectorAll('.dir-card').forEach((card) => {
           card.addEventListener('click', () => {
             selectGameTable(card.dataset.gameId);
           });
+        });
+
+        document.querySelectorAll('.dir-community-card').forEach((card) => {
+          card.addEventListener('click', openCommunityBuilding);
         });
       }
 
@@ -1663,6 +1890,11 @@
       // Category Pill Event Listeners
       document.querySelectorAll('.cat-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
+          if (pill.dataset.category === 'community') {
+            flyToCategory('community');
+            openCommunityBuilding();
+            return;
+          }
           closeDetailCard();
           flyToCategory(pill.dataset.category);
         });
@@ -1735,6 +1967,7 @@
           zoneSpot3.intensity = 1.1;
           particleMat.color.set('#fcd34d');
           renderer.toneMappingExposure = 1.15;
+          communityArea.setTheme(true);
         } else {
           htmlEl.classList.remove('dark');
           document.body.classList.remove('bg-lounge-dark', 'text-stone-100');
@@ -1752,6 +1985,7 @@
           zoneSpot3.intensity = 0.35;
           particleMat.color.set('#d97706');
           renderer.toneMappingExposure = 1.08;
+          communityArea.setTheme(false);
         }
       }
 
@@ -1781,6 +2015,76 @@
         const fb = document.getElementById('account-feedback');
         fb.classList.remove('hidden');
         setTimeout(() => fb.classList.add('hidden'), 2600);
+      });
+
+      // Update log modal and release selector
+      const updatesModal = document.getElementById('updates-modal');
+      const updateVersionButtons = Array.from(document.querySelectorAll('.update-version'));
+      const updateReleases = Array.from(document.querySelectorAll('.update-release'));
+      let updatesReturnFocus = null;
+      let updatesCloseTimer = null;
+
+      function openUpdatesModal() {
+        window.clearTimeout(updatesCloseTimer);
+        updatesReturnFocus = document.activeElement;
+        updatesModal.classList.remove('hidden', 'pointer-events-none');
+        updatesModal.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => updatesModal.classList.add('is-open'));
+        const selectedVersion = updateVersionButtons.find((button) => button.getAttribute('aria-pressed') === 'true');
+        (selectedVersion || document.getElementById('btn-close-updates')).focus();
+      }
+
+      function closeUpdatesModal() {
+        if (updatesModal.classList.contains('hidden')) return;
+        updatesModal.classList.remove('is-open');
+        updatesModal.classList.add('pointer-events-none');
+        updatesModal.setAttribute('aria-hidden', 'true');
+        updatesCloseTimer = window.setTimeout(() => {
+          updatesModal.classList.add('hidden');
+          if (updatesReturnFocus && typeof updatesReturnFocus.focus === 'function') updatesReturnFocus.focus();
+        }, 240);
+      }
+
+      function selectUpdateVersion(version) {
+        updateVersionButtons.forEach((button) => {
+          const isSelected = button.dataset.updateVersion === version;
+          button.setAttribute('aria-pressed', String(isSelected));
+          button.classList.toggle('border-amber-500/40', isSelected);
+          button.classList.toggle('bg-amber-500/15', isSelected);
+          button.classList.toggle('border-stone-300/70', !isSelected);
+          button.classList.toggle('dark:border-white/10', !isSelected);
+          button.classList.toggle('bg-white/50', !isSelected);
+          button.classList.toggle('dark:bg-white/[.025]', !isSelected);
+          button.querySelector('span.font-mono').classList.toggle('text-amber-800', isSelected);
+          button.querySelector('span.font-mono').classList.toggle('dark:text-amber-200', isSelected);
+          button.querySelector('span.font-mono').classList.toggle('text-stone-700', !isSelected);
+          button.querySelector('span.font-mono').classList.toggle('dark:text-stone-200', !isSelected);
+        });
+
+        updateReleases.forEach((release) => {
+          const isSelected = release.dataset.release === version;
+          if (!isSelected) {
+            release.classList.add('hidden');
+            release.classList.remove('is-entering');
+            return;
+          }
+          release.classList.add('is-entering');
+          release.classList.remove('hidden');
+          requestAnimationFrame(() => release.classList.remove('is-entering'));
+        });
+      }
+
+      document.getElementById('btn-updates-desktop').addEventListener('click', openUpdatesModal);
+      document.getElementById('btn-updates-mobile').addEventListener('click', openUpdatesModal);
+      document.getElementById('btn-close-updates').addEventListener('click', closeUpdatesModal);
+      updatesModal.addEventListener('click', (event) => {
+        if (event.target === updatesModal) closeUpdatesModal();
+      });
+      updateVersionButtons.forEach((button) => {
+        button.addEventListener('click', () => selectUpdateVersion(button.dataset.updateVersion));
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !updatesModal.classList.contains('hidden')) closeUpdatesModal();
       });
 
       // Launch Game Modal
@@ -1912,6 +2216,14 @@
           }
         });
 
+        // Animate Community Pavilion Building
+        communityArea.update(
+          elapsed,
+          state.hoveredAreaId === 'community',
+          state.selectedAreaId === 'community',
+          state.activeCategory !== 'all' && state.activeCategory !== 'community'
+        );
+
         // Gentle drift of ambient parlor dust motes
         ambientParticles.rotation.y = elapsed * 0.025;
 
@@ -1924,5 +2236,6 @@
       };
     })();
   </script>
+  <script src="terms.js"></script>
 </body>
 </html>

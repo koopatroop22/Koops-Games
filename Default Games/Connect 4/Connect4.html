@@ -2798,12 +2798,16 @@
           this.bindUI();
           this.enterMainMenu(true);
           const inviteCode = new URLSearchParams(window.location.search).get('room')?.trim().toUpperCase();
+          const launchAsHost = new URLSearchParams(window.location.search).get('host') === '1';
           if (/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(inviteCode || '')) {
             this.mode = 'online';
             this.syncMenuControls();
             this.onlineRoomCodeInput.value = inviteCode;
-            this.setOnlineStatus('You were invited to this room. Set your temporary name and preferred table atmosphere, then join.');
-            requestAnimationFrame(() => this.onlineNameInput?.focus());
+            const playerName = new URLSearchParams(window.location.search).get('playerName');
+            if (playerName && this.onlineNameInput) this.onlineNameInput.value = playerName.slice(0, 20);
+            this.setOnlineStatus(launchAsHost ? 'Opening your Community lobby…' : 'You were invited to this room. Set your temporary name and preferred table atmosphere, then join.');
+            if (launchAsHost) setTimeout(() => this.joinOnlineRoom(), 100);
+            else requestAnimationFrame(() => this.onlineNameInput?.focus());
           }
         }
 
@@ -3056,7 +3060,25 @@
               return;
             }
             if (roomBeforeJoin?.hostUid === user.uid) {
-              this.setOnlineStatus('You are already hosting this room. Join from a different account or device.', true);
+              if (new URLSearchParams(window.location.search).get('host') !== '1') {
+                this.setOnlineStatus('You are already hosting this room. Join from a different account or device.', true);
+                return;
+              }
+              if (roomBeforeJoin.status !== 'waiting' || roomBeforeJoin.guestUid) {
+                this.setOnlineStatus('Your Community room is no longer waiting for a guest.', true);
+                return;
+              }
+              this.onlineRoomCode = code;
+              this.onlineRoomRef = roomRef;
+              this.onlineRoomData = roomBeforeJoin;
+              this.onlineRound = Number(roomBeforeJoin.round) || 1;
+              this.onlineHasStarted = false;
+              this.onlineRoomCodeValue.textContent = code;
+              this.onlineRoomCodeDisplay.classList.remove('hidden');
+              this.onlineRoomCodeDisplay.classList.add('flex');
+              if (this.onlineNameInput) this.onlineNameInput.disabled = true;
+              this.listenToOnlineRoom(roomRef, code);
+              this.setOnlineStatus('Community lobby ready. Your guest can join with this room code.');
               return;
             }
             if (roomBeforeJoin?.status !== 'waiting' || roomBeforeJoin?.guestUid) {
@@ -4038,5 +4060,6 @@
     })();
   </script>
   <script type="module" src="../../account-activity.js"></script>
+  <script src="../../terms.js"></script>
 </body>
 </html>

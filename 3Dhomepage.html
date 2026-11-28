@@ -220,6 +220,10 @@
           class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-stone-300/70 dark:border-white/10 bg-white/75 dark:bg-stone-900/70 text-stone-700 dark:text-stone-200 hover:border-amber-500/50">
           Card Games <span class="font-mono text-[11px] opacity-70 ml-1">(1 · 18+)</span>
         </button>
+        <button id="btn-community-nav" data-category="community"
+          class="cat-pill glass-panel shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border border-teal-500/40 bg-teal-500/15 text-teal-800 dark:text-teal-200 hover:border-teal-400">
+          Community Area <span id="comm-nav-badge" class="font-mono text-[11px] opacity-85 ml-1">(0 Lobbies)</span>
+        </button>
       </nav>
 
       <!-- Right: Desktop Controls -->
@@ -422,6 +426,7 @@
       <p id="launch-description" class="text-xs text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
         Your table is set and ready. Open the live Koops Games table in a new tab or return to the 3D parlor.
       </p>
+      <a href="terms.html" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs font-semibold text-amber-700 underline dark:text-amber-300">Read the full Terms &amp; Conditions</a>
       <p id="launch-safety-note" class="hidden text-xs text-amber-800 dark:text-amber-200 mt-3 leading-relaxed rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
         Poker is a gambling-style game. This version is for adults 18+ and uses free-play virtual chips only. No real-money betting, purchases, prizes, cash-out, or transfer of chips.
       </p>
@@ -437,6 +442,9 @@
       </div>
     </div>
   </div>
+
+  <!-- TEMPORARY COMMUNITY AREA & LOBBY HALL MODULE -->
+  <script src="community-hub.js"></script>
 
   <!-- MAIN THREE.JS & INTERACTIVE APPLICATION SCRIPT -->
   <script>
@@ -596,6 +604,10 @@
         cards: {
           pos: new THREE.Vector3(11.5, 11.5, 17.5),
           target: new THREE.Vector3(11.5, 1.0, 8.5)
+        },
+        community: {
+          pos: new THREE.Vector3(11.5, 10.2, -2.2),
+          target: new THREE.Vector3(11.5, 1.8, -13.5)
         }
       };
 
@@ -611,6 +623,8 @@
         activeCategory: 'all',
         selectedGameId: null,
         hoveredGameId: null,
+        selectedAreaId: null,
+        hoveredAreaId: null,
         inspectedIds: new Set(['monopoly']),
         directoryOpen: true,
         // Camera interpolation state
@@ -1402,6 +1416,38 @@
         };
       });
 
+      const communityArea = window.KoopsCommunityHub.createCommunityArea3D({
+        scene,
+        THREE,
+        raycastTargets,
+        showHubIntro
+      });
+
+      const communityHubUI = window.KoopsCommunityHub.initCommunityHubUI({
+        getPlayerName: () => document.getElementById('player-name-input')?.value || 'KoopaTroop22',
+        onOpenCommunity: () => {
+          state.selectedAreaId = 'community';
+          updateDirectoryActiveState();
+        },
+        onCloseCommunity: () => {
+          state.selectedAreaId = null;
+          updateDirectoryActiveState();
+        },
+        onCountChange: (count) => {
+          const badge = document.getElementById('comm-nav-badge');
+          if (badge) badge.textContent = `(${count} Live)`;
+        }
+      });
+
+      function openCommunityBuilding() {
+        closeDetailCard();
+        state.selectedAreaId = 'community';
+        state.desiredTarget.set(communityArea.position.x, 1.8, communityArea.position.z);
+        state.desiredCamPos.set(communityArea.camOffset.x, communityArea.camOffset.y, communityArea.camOffset.z);
+        state.isTransitioning = true;
+        Promise.resolve(communityHubUI).then((ctrl) => ctrl?.openModal());
+      }
+
       // A small Three.js parlor emblem animates during the first-visit intro.
       const hubIntroGroup = new THREE.Group();
       hubIntroGroup.position.set(0, 3.4, 0);
@@ -1452,6 +1498,7 @@
           obj.hitBox.visible = true;
           obj.spawnStartAt = startAt + index * 0.095;
         });
+        communityArea.spawn(startAt + GAMES.length * 0.095);
         if (hubLoadingScreen) {
           hubLoadingScreen.classList.add('is-leaving');
           setTimeout(() => hubLoadingScreen.remove(), 700);
@@ -1485,21 +1532,36 @@
         const hits = raycaster.intersectObjects(raycastTargets, false);
 
         if (hits.length > 0) {
-          const hitGameId = hits[0].object.userData.gameId;
-          state.hoveredGameId = hitGameId;
-          renderer.domElement.style.cursor = 'pointer';
-
-          const game = GAMES.find((g) => g.id === hitGameId);
-          if (game) {
-            hoverTitle.textContent = game.title;
-            hoverMeta.textContent = game.tag;
-            hoverDot.className = `w-2.5 h-2.5 rounded-full animate-pulse-soft ${game.dotClass}`;
+          const hitObj = hits[0].object;
+          if (hitObj.userData.hubAreaId === 'community') {
+            state.hoveredGameId = null;
+            state.hoveredAreaId = 'community';
+            renderer.domElement.style.cursor = 'pointer';
+            hoverTitle.textContent = 'Community Lobby Hall';
+            hoverMeta.textContent = 'TEMP ONLINE AREA · CLICK TO BROWSE OR CREATE LOBBY';
+            hoverDot.className = 'w-2.5 h-2.5 rounded-full animate-pulse-soft bg-teal-400';
             hoverPill.style.left = `${e.clientX}px`;
             hoverPill.style.top = `${e.clientY}px`;
             hoverPill.classList.remove('opacity-0');
+          } else {
+            const hitGameId = hitObj.userData.gameId;
+            state.hoveredAreaId = null;
+            state.hoveredGameId = hitGameId;
+            renderer.domElement.style.cursor = 'pointer';
+
+            const game = GAMES.find((g) => g.id === hitGameId);
+            if (game) {
+              hoverTitle.textContent = game.title;
+              hoverMeta.textContent = game.tag;
+              hoverDot.className = `w-2.5 h-2.5 rounded-full animate-pulse-soft ${game.dotClass}`;
+              hoverPill.style.left = `${e.clientX}px`;
+              hoverPill.style.top = `${e.clientY}px`;
+              hoverPill.classList.remove('opacity-0');
+            }
           }
         } else {
           state.hoveredGameId = null;
+          state.hoveredAreaId = null;
           renderer.domElement.style.cursor = 'grab';
           hoverPill.classList.add('opacity-0');
         }
@@ -1517,7 +1579,12 @@
           raycaster.setFromCamera(pointer, camera);
           const hits = raycaster.intersectObjects(raycastTargets, false);
           if (hits.length > 0) {
-            selectGameTable(hits[0].object.userData.gameId);
+            const hitObj = hits[0].object;
+            if (hitObj.userData.hubAreaId === 'community') {
+              openCommunityBuilding();
+            } else if (hitObj.userData.gameId) {
+              selectGameTable(hitObj.userData.gameId);
+            }
           }
         }
       });
@@ -1540,6 +1607,7 @@
         const game = GAMES.find((g) => g.id === gameId);
         if (!game) return;
 
+        state.selectedAreaId = null;
         state.selectedGameId = game.id;
         state.inspectedIds.add(game.id);
         document.getElementById('stat-visited').textContent = `${state.inspectedIds.size} / ${GAMES.length}`;
@@ -1621,9 +1689,11 @@
         const filtered =
           state.activeCategory === 'all'
             ? GAMES
-            : GAMES.filter((g) => g.category === state.activeCategory);
+            : state.activeCategory === 'community'
+              ? []
+              : GAMES.filter((g) => g.category === state.activeCategory);
 
-        directoryContainer.innerHTML = filtered
+        const gameCardsHtml = filtered
           .map((game) => {
             const isSelected = state.selectedGameId === game.id;
             return `
@@ -1647,10 +1717,39 @@
           })
           .join('');
 
+        const showCommunityCard = state.activeCategory === 'all' || state.activeCategory === 'community';
+        const isCommunitySelected = state.selectedAreaId === 'community';
+        const communityCardHtml = showCommunityCard
+          ? `
+            <button data-hub-area="community"
+              class="dir-community-card glass-panel shrink-0 w-52 sm:w-56 p-3 rounded-2xl text-left border transition-all ${
+                isCommunitySelected
+                  ? 'bg-teal-500/20 border-teal-400 shadow-lg shadow-teal-500/20'
+                  : 'bg-teal-500/10 dark:bg-teal-950/50 border-teal-500/35 hover:border-teal-400'
+              }">
+              <div class="flex items-center justify-between gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse-soft"></span>
+                <span class="font-mono text-[9px] uppercase tracking-wider text-teal-700 dark:text-teal-300 truncate">TEMP · ONLINE HUB</span>
+              </div>
+              <div class="font-display font-bold text-sm text-stone-900 dark:text-white mt-1.5 truncate">Community Lobby Hall</div>
+              <div class="text-[11px] text-teal-700 dark:text-teal-300 font-semibold mt-1 flex items-center justify-between">
+                <span>Browse / Create Lobby</span>
+                <span>→</span>
+              </div>
+            </button>
+          `
+          : '';
+
+        directoryContainer.innerHTML = communityCardHtml + gameCardsHtml;
+
         document.querySelectorAll('.dir-card').forEach((card) => {
           card.addEventListener('click', () => {
             selectGameTable(card.dataset.gameId);
           });
+        });
+
+        document.querySelectorAll('.dir-community-card').forEach((card) => {
+          card.addEventListener('click', openCommunityBuilding);
         });
       }
 
@@ -1663,6 +1762,11 @@
       // Category Pill Event Listeners
       document.querySelectorAll('.cat-pill').forEach((pill) => {
         pill.addEventListener('click', () => {
+          if (pill.dataset.category === 'community') {
+            flyToCategory('community');
+            openCommunityBuilding();
+            return;
+          }
           closeDetailCard();
           flyToCategory(pill.dataset.category);
         });
@@ -1735,6 +1839,7 @@
           zoneSpot3.intensity = 1.1;
           particleMat.color.set('#fcd34d');
           renderer.toneMappingExposure = 1.15;
+          communityArea.setTheme(true);
         } else {
           htmlEl.classList.remove('dark');
           document.body.classList.remove('bg-lounge-dark', 'text-stone-100');
@@ -1752,6 +1857,7 @@
           zoneSpot3.intensity = 0.35;
           particleMat.color.set('#d97706');
           renderer.toneMappingExposure = 1.08;
+          communityArea.setTheme(false);
         }
       }
 
@@ -1912,6 +2018,14 @@
           }
         });
 
+        // Animate Community Pavilion Building
+        communityArea.update(
+          elapsed,
+          state.hoveredAreaId === 'community',
+          state.selectedAreaId === 'community',
+          state.activeCategory !== 'all' && state.activeCategory !== 'community'
+        );
+
         // Gentle drift of ambient parlor dust motes
         ambientParticles.rotation.y = elapsed * 0.025;
 
@@ -1924,5 +2038,6 @@
       };
     })();
   </script>
+  <script src="terms.js"></script>
 </body>
 </html>

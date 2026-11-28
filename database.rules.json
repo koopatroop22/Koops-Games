@@ -448,6 +448,13 @@
           }
         }
       }
+    },
+    "communityLobbies": {
+      ".read": "auth !== null",
+      "$lobbyId": {
+        ".write": "auth !== null && ((!data.exists() && newData.child('hostUid').val() === auth.uid && newData.child('status').val() === 'waiting') || (data.exists() && data.child('hostUid').val() === auth.uid && (!newData.exists() || newData.child('hostUid').val() === auth.uid)))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['id','gameId','title','hostName','hostUid','status','createdAt']) && newData.child('id').isString() && (newData.child('gameId').val() === 'monopoly' || newData.child('gameId').val() === 'connect4') && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 42 && newData.child('hostName').isString() && newData.child('hostName').val().length > 0 && newData.child('hostName').val().length <= 20 && newData.child('hostUid').isString() && newData.child('status').val() === 'waiting' && newData.child('createdAt').isNumber())"
+      }
     }
   }
 }
