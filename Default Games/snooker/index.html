@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#091713">
-  <title>Koops Games Snooker 3D</title>
+  <title>Koops Games Cue Sports 3D</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -12,10 +12,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body data-game-id="snooker">
-  <canvas id="snooker-canvas" aria-label="Interactive 3D snooker table. Aim by moving the pointer over the table."></canvas>
+  <canvas id="snooker-canvas" aria-label="Interactive 3D snooker table. Drag to orbit the camera and move over the cloth to aim."></canvas>
 
   <header class="topbar">
-    <a href="../../index.html" class="brand"><span class="brand-mark">K</span><span>KOOPS GAMES <small>SNOOKER 3D</small></span></a>
+    <a href="../../index.html" class="brand"><span class="brand-mark">K</span><span>KOOPS GAMES <small>CUE SPORTS 3D</small></span></a>
     <div class="top-actions"><button class="quiet-btn theme-toggle" type="button">☼ Light mode</button><button id="rules-btn" class="quiet-btn" type="button">Rules</button><a class="quiet-btn hub-link" href="../../index.html">← Game Hub</a></div>
   </header>
 
@@ -32,7 +32,7 @@
 
   <section id="controls" class="controls hidden">
     <div class="aim-copy"><strong>Move over the cloth to aim</strong><span id="aim-hint">Set the power, then take your shot.</span></div>
-    <label class="camera-control" for="camera-mode"><span>CAMERA</span><select id="camera-mode" aria-label="Camera view"><option value="overhead">Overhead · play</option><option value="side">Side view</option><option value="end">End view</option><option value="corner">Corner view</option></select></label>
+    <div class="camera-control"><span>CAMERA</span><button id="camera-reset" type="button" aria-label="Reset camera to overhead view">Reset view</button></div>
     <label class="power-control" for="power-slider"><span>POWER</span><input id="power-slider" type="range" min="10" max="100" value="48"><b id="power-value">48%</b></label>
     <button id="place-cue-btn" class="secondary-btn hidden" type="button">Place cue ball in D</button>
     <label id="free-ball-control" class="free-ball-control hidden" for="free-ball-select"><span>FREE BALL</span><select id="free-ball-select"><option value="">Choose a ball</option></select></label>
@@ -45,8 +45,9 @@
     <div class="setup-card">
       <div class="setup-kicker"><span class="live-led"></span> KOOPS GAMES CUE CLUB</div>
       <h1>Take your<br><em>place at the table.</em></h1>
-      <p class="setup-intro">A full frame of snooker in 3D. Line up your shot, build a break, and play by the rules.</p>
+      <p class="setup-intro">Choose snooker, 8-ball solids and stripes, or American 9-ball. Line up your shots and play a full two-player match in 3D.</p>
       <div class="setup-fields">
+        <label class="frame-select">GAME MODE<select id="game-mode"><option value="snooker">Snooker</option><option value="eight-ball">8-Ball Pool · Solids &amp; Stripes</option><option value="nine-ball">American Pool · 9-Ball</option></select></label>
         <label>PLAYER ONE<input id="name-one" maxlength="18" value="Player 1"></label>
         <label>PLAYER TWO<input id="name-two" maxlength="18" value="Player 2"></label>
         <label class="frame-select">MATCH LENGTH<select id="best-of"><option value="1">One frame</option><option value="3" selected>Best of 3</option><option value="5">Best of 5</option></select></label>
@@ -59,21 +60,14 @@
   <section id="rules-screen" class="screen-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="rules-title">
     <div class="rules-card">
       <button id="close-rules-btn" class="close-btn" type="button" aria-label="Close rules">×</button>
-      <div class="setup-kicker">THE RULES OF THE TABLE</div><h2 id="rules-title">Snooker, <em>at a glance.</em></h2>
-      <div class="rules-scroll">
-        <h3>Build your break</h3><p>Pot a red for 1 point, then a colour of your choice (yellow 2, green 3, brown 4, blue 5, pink 6 or black 7). A colour potted while reds remain is put back on its spot. Keep alternating red and colour while a red remains.</p>
-        <h3>Clear the colours</h3><p>After the final red, play one colour, then clear yellow, green, brown, blue, pink and black in order. These colours stay potted. The player with the most points wins the frame.</p>
-        <h3>Fouls and snookers</h3><p>It is a foul to miss the ball on, hit a ball out of order, pot the cue ball, or send a ball off the table. The other player receives at least 4 points (up to 7 for higher-value balls) and takes the next turn. A cue-ball scratch gives the incoming player ball in hand in the D.</p>
-        <p>After a foul, the incoming player can nominate a free ball when all balls on are snookered, or ask for a foul-and-miss replay. A nominated free ball counts as the ball on and is re-spotted if potted.</p>
-        <h3>Frame tie and concession</h3><p>If scores are level after the black, the black is re-spotted. The next pot or foul decides the frame. A player may concede a frame. A match is played to the selected best-of length.</p>
-        <h3>Controls</h3><p>Move the pointer across the table to aim. Use the power slider and select Take Shot. After a scratch, click inside the D to place the cue ball. Press Space to shoot.</p>
-      </div>
+      <div class="setup-kicker">THE RULES OF THE TABLE</div><h2 id="rules-title">Cue sports, <em>at a glance.</em></h2>
+      <div class="rules-scroll" id="rules-copy"></div>
       <a href="../../index.html" class="back-link">← Return to Game Hub</a>
     </div>
   </section>
 
   <section id="result-screen" class="screen-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
-    <div class="result-card"><div class="setup-kicker">FRAME COMPLETE</div><h2 id="result-title">Frame winner</h2><p id="result-copy"></p><div class="result-actions"><button id="next-frame-btn" class="start-btn" type="button">Next frame →</button><a href="../../index.html" class="hub-result-link">Return to Game Hub</a></div></div>
+    <div class="result-card"><div id="result-kicker" class="setup-kicker">FRAME COMPLETE</div><h2 id="result-title">Frame winner</h2><p id="result-copy"></p><div class="result-actions"><button id="next-frame-btn" class="start-btn" type="button">Next frame →</button><a href="../../index.html" class="hub-result-link">Return to Game Hub</a></div></div>
   </section>
 
   <script src="../theme.js"></script>

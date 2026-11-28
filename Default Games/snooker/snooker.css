@@ -2,7 +2,8 @@
 * { box-sizing:border-box; }
 html,body { width:100%; height:100%; margin:0; overflow:hidden; }
 body { background:radial-gradient(ellipse at 50% 55%,#16382c 0,#0b2019 43%,#07120f 78%); }
-#snooker-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
+#snooker-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+#snooker-canvas.orbit-dragging { cursor:grabbing; }
 .topbar { position:fixed; z-index:5; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:18px clamp(16px,4vw,48px); pointer-events:none; background:linear-gradient(180deg,rgba(4,13,10,.82),transparent); }
 .brand,.top-actions { display:flex; align-items:center; gap:10px; pointer-events:auto; }
 .brand { color:#f5f4e9; font:700 12px 'Space Grotesk',sans-serif; letter-spacing:.11em; text-decoration:none; }
@@ -30,7 +31,7 @@ body { background:radial-gradient(ellipse at 50% 55%,#16382c 0,#0b2019 43%,#0712
 .aim-copy strong { color:#eff6ed; font-size:12px; }
 .aim-copy span { color:#8ea496; font-size:10px; }
 .camera-control { display:grid; flex:none; gap:5px; color:#93a99a; font-size:9px; font-weight:700; letter-spacing:.12em; }
-.camera-control select { max-width:145px; padding:8px 9px; border:1px solid rgba(211,231,216,.2); border-radius:9px; color:#e3eee3; background:#13261b; font:600 10px 'DM Sans',sans-serif; letter-spacing:0; cursor:pointer; }
+.camera-control button { width:max-content; padding:8px 9px; border:1px solid rgba(211,231,216,.2); border-radius:9px; color:#e3eee3; background:#13261b; font:600 10px 'DM Sans',sans-serif; letter-spacing:0; cursor:pointer; }
 .power-control { display:grid; flex:1; grid-template-columns:auto minmax(80px,1fr) 36px; align-items:center; gap:9px; color:#93a99a; font-size:9px; font-weight:700; letter-spacing:.12em; }
 .power-control input { width:100%; accent-color:#a8d49d; cursor:pointer; }
 .power-control b { color:#d8ebd2; font-size:11px; letter-spacing:0; }
@@ -90,11 +91,11 @@ html[data-theme="light"] .back-link,html[data-theme="light"] .hub-result-link { 
 html[data-theme="light"] .secondary-btn { border-color:rgba(51,92,62,.22); color:#2d4b35; background:#e4eee2; }
 html[data-theme="light"] .free-ball-control { color:#526b59; }
 html[data-theme="light"] .camera-control { color:#526b59; }
-html[data-theme="light"] .camera-control select { border-color:rgba(46,88,59,.22); color:#20372b; background:#f8fbf6; }
+html[data-theme="light"] .camera-control button { border-color:rgba(46,88,59,.22); color:#20372b; background:#f8fbf6; }
 html[data-theme="light"] .screen-overlay { background:radial-gradient(ellipse at 15% 10%,rgba(127,185,137,.18),transparent 36%),rgba(206,222,208,.72); }
 @keyframes fade-in { from { opacity:0; } to { opacity:1; } }
 @keyframes card-enter { from { opacity:0; transform:translateY(18px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes led-pulse { 50% { box-shadow:0 0 19px #76d88c; opacity:.68; } }
-@media(max-width:760px) { .controls { bottom:9px; flex-wrap:wrap; gap:10px; padding:11px; } .aim-copy { flex:1; min-width:130px; } .camera-control { order:2; } .camera-control select { max-width:132px; } .power-control { order:3; flex-basis:100%; } .shoot-btn { padding:11px 14px; } .scoreboard { top:66px; } .shot-status { top:138px; } }
+@media(max-width:760px) { .controls { bottom:9px; flex-wrap:wrap; gap:10px; padding:11px; } .aim-copy { flex:1; min-width:130px; } .camera-control { order:2; } .power-control { order:3; flex-basis:100%; } .shoot-btn { padding:11px 14px; } .scoreboard { top:66px; } .shot-status { top:138px; } }
 @media(max-width:430px) { .topbar { padding-top:12px; } .quiet-btn { padding:8px 9px; font-size:10px; } .brand { font-size:10px; } .brand-mark { width:32px; height:32px; } .scoreboard { grid-template-columns:minmax(90px,1fr) 60px minmax(90px,1fr); } .player-score { padding:7px 8px; } .player-score span { font-size:9px; } .player-score strong { font-size:21px; } .frame-info span,.frame-info small { font-size:7px; } .shot-status { font-size:9px; } .reds-counter { padding-left:5px; } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }

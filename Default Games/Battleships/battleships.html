@@ -646,6 +646,10 @@
         let lightningFlashTimer = 0;
         let friendlyBoardGroup, enemyBoardGroup;
         let placementPreviewGroup, markersGroup, projectilesGroup, effectsGroup, ships3DGroup, bubblesGroup;
+        let surfaceSceneryGroup, underwaterSceneryGroup;
+        const scenicVessels = [];
+        const scenicBeacons = [];
+        const scenicFish = [];
         let gridCellMeshes = { friendly: [], enemy: [] };
         let hoverReticleMesh = null;
         let pointerGesture = null;
@@ -955,6 +959,8 @@
             buildSkyDome();
             buildRealisticOcean();
             buildSeabedFloor();
+            buildSurfaceScenery();
+            buildUnderwaterScenery();
             buildUnderwaterBubbles();
             buildRainSystem();
 
@@ -1047,6 +1053,261 @@
             });
             const skyDome = new THREE.Mesh(skyGeo, skyMat);
             scene.add(skyDome);
+        }
+
+        function buildSurfaceScenery() {
+            surfaceSceneryGroup = new THREE.Group();
+            surfaceSceneryGroup.name = 'Surface archipelago and navigation markers';
+            scene.add(surfaceSceneryGroup);
+
+            const cliffMat = new THREE.MeshStandardMaterial({ color: 0x263d4c, roughness: 0.96, flatShading: true });
+            const shadowMat = new THREE.MeshStandardMaterial({ color: 0x172a39, roughness: 1, flatShading: true });
+            const turfMat = new THREE.MeshStandardMaterial({ color: 0x315548, roughness: 0.94, flatShading: true });
+            const rockGeo = new THREE.DodecahedronGeometry(1, 1);
+            const lowGeo = new THREE.DodecahedronGeometry(1, 0);
+            const treeGeo = new THREE.ConeGeometry(1, 1, 7);
+            const islandSites = [
+                { x: -88, z: -56, sx: 12, sz: 9, peaks: 3 },
+                { x: 78, z: -79, sx: 15, sz: 11, peaks: 4 },
+                { x: 99, z: 18, sx: 11, sz: 8, peaks: 2 },
+                { x: -102, z: 17, sx: 14, sz: 10, peaks: 3 },
+                { x: 57, z: 96, sx: 10, sz: 8, peaks: 2 },
+                { x: -61, z: 91, sx: 13, sz: 9, peaks: 3 }
+            ];
+
+            islandSites.forEach((site, siteIndex) => {
+                const island = new THREE.Group();
+                island.position.set(site.x, 0, site.z);
+
+                const submergedShoulder = new THREE.Mesh(new THREE.CylinderGeometry(site.sx * 1.16, site.sx * 1.55, 7, 10, 1), shadowMat);
+                submergedShoulder.position.y = -2.1;
+                submergedShoulder.scale.z = site.sz / site.sx;
+                submergedShoulder.rotation.y = siteIndex * 0.42;
+                island.add(submergedShoulder);
+
+                const shoreline = new THREE.Mesh(lowGeo, cliffMat);
+                shoreline.position.y = 0.55;
+                shoreline.scale.set(site.sx, 1.05, site.sz);
+                shoreline.rotation.y = siteIndex * 0.73;
+                island.add(shoreline);
+
+                const crown = new THREE.Mesh(rockGeo, turfMat);
+                crown.position.y = 1.65;
+                crown.scale.set(site.sx * 0.72, 2.0 + site.peaks * 0.18, site.sz * 0.7);
+                crown.rotation.set(0.08, siteIndex * 0.81, -0.05);
+                island.add(crown);
+
+                for (let peakIndex = 0; peakIndex < site.peaks; peakIndex++) {
+                    const angle = (peakIndex / site.peaks) * Math.PI * 2 + siteIndex;
+                    const radius = 0.25 + (peakIndex % 2) * 0.2;
+                    const peak = new THREE.Mesh(peakIndex % 2 ? lowGeo : rockGeo, peakIndex % 2 ? cliffMat : shadowMat);
+                    peak.position.set(Math.cos(angle) * site.sx * radius, 2.6 + (peakIndex % 3) * 0.4, Math.sin(angle) * site.sz * radius);
+                    peak.scale.set(site.sx * (0.2 + (peakIndex % 2) * 0.06), 2.1 + (peakIndex % 3) * 0.65, site.sz * 0.24);
+                    peak.rotation.y = angle;
+                    island.add(peak);
+                }
+
+                if (siteIndex !== 1) {
+                    for (let treeIndex = 0; treeIndex < 5; treeIndex++) {
+                        const angle = treeIndex * 2.4 + siteIndex;
+                        const tree = new THREE.Mesh(treeGeo, treeIndex % 2 ? turfMat : cliffMat);
+                        const x = Math.cos(angle) * site.sx * 0.42;
+                        const z = Math.sin(angle) * site.sz * 0.42;
+                        tree.position.set(x, 3.2, z);
+                        tree.scale.set(0.55, 1.7 + (treeIndex % 3) * 0.35, 0.55);
+                        island.add(tree);
+                    }
+                }
+                surfaceSceneryGroup.add(island);
+            });
+
+            // A remote coast lighthouse gives the sea a strong horizon landmark.
+            const lighthouse = new THREE.Group();
+            lighthouse.position.set(78, 0, -79);
+            lighthouse.scale.setScalar(0.88);
+            const towerMat = new THREE.MeshStandardMaterial({ color: 0xdce6e8, roughness: 0.72 });
+            const stripeMat = new THREE.MeshStandardMaterial({ color: 0xb94b42, roughness: 0.78 });
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.15, 8.4, 12), towerMat);
+            tower.position.y = 5.6;
+            lighthouse.add(tower);
+            [3.7, 5.9, 8.0].forEach((y, index) => {
+                const band = new THREE.Mesh(new THREE.CylinderGeometry(0.83 - index * 0.03, 0.88 - index * 0.03, 0.7, 12), stripeMat);
+                band.position.y = y;
+                lighthouse.add(band);
+            });
+            const lantern = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.92, 0.92, 1.15, 10),
+                new THREE.MeshStandardMaterial({ color: 0x9edaf0, emissive: 0x38bdf8, emissiveIntensity: 1.7, transparent: true, opacity: 0.75, metalness: 0.4, roughness: 0.2 })
+            );
+            lantern.position.y = 10.15;
+            lighthouse.add(lantern);
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(1.18, 1.15, 10), stripeMat);
+            roof.position.y = 11.25;
+            lighthouse.add(roof);
+            const beacon = new THREE.PointLight(0x7dd3fc, 5.2, 82, 1.8);
+            beacon.position.y = 10.2;
+            lighthouse.add(beacon);
+            scenicBeacons.push({ light: beacon, phase: 0.2, base: 4.4 });
+            surfaceSceneryGroup.add(lighthouse);
+
+            // Navigation buoys sit beyond the playable grids as scale and depth cues.
+            const buoySites = [
+                { x: -30, z: -14, color: 0xf87171, phase: 0 },
+                { x: 30, z: 14, color: 0x34d399, phase: 1.3 },
+                { x: -29, z: 15, color: 0xfbbf24, phase: 2.2 },
+                { x: 29, z: -15, color: 0x38bdf8, phase: 3.1 }
+            ];
+            const buoyRed = new THREE.MeshStandardMaterial({ color: 0xd7473d, roughness: 0.38, metalness: 0.25 });
+            const buoyWhite = new THREE.MeshStandardMaterial({ color: 0xe9f1ec, roughness: 0.32, metalness: 0.2 });
+            buoySites.forEach((site, index) => {
+                const buoy = new THREE.Group();
+                buoy.position.set(site.x, 0, site.z);
+                const float = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.82, 0.85, 10), index % 2 ? buoyWhite : buoyRed);
+                float.position.y = 0.22;
+                buoy.add(float);
+                const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.38, 0.72, 8), buoyWhite);
+                collar.position.y = 1.0;
+                buoy.add(collar);
+                const lamp = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.24, 10, 8),
+                    new THREE.MeshBasicMaterial({ color: site.color })
+                );
+                lamp.position.y = 1.48;
+                buoy.add(lamp);
+                const light = new THREE.PointLight(site.color, 2.1, 11, 2);
+                light.position.y = 1.5;
+                buoy.add(light);
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.06, 6, 16), buoyWhite);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = 0.72;
+                buoy.add(ring);
+                surfaceSceneryGroup.add(buoy);
+                scenicBeacons.push({ light, buoy, phase: site.phase, base: 1.5, floatY: 0.22 + index * 0.015 });
+            });
+
+            createScenicVessel(-48, -29, 0.72, 0.36, 0.42);
+            createScenicVessel(43, 43, 0.48, -0.28, 1.1);
+            surfaceSceneryGroup.visible = true;
+        }
+
+        function createScenicVessel(x, z, scale, dx, dz) {
+            const vessel = new THREE.Group();
+            vessel.position.set(x, 0, z);
+            vessel.scale.setScalar(scale);
+            vessel.rotation.y = Math.atan2(dx, dz);
+
+            const hullMat = new THREE.MeshStandardMaterial({ color: 0x354657, roughness: 0.52, metalness: 0.4 });
+            const deckMat = new THREE.MeshStandardMaterial({ color: 0x8999a5, roughness: 0.66, metalness: 0.25 });
+            const windowMat = new THREE.MeshStandardMaterial({ color: 0x73c8e5, emissive: 0x14516a, emissiveIntensity: 0.7, metalness: 0.3 });
+            const hull = new THREE.Mesh(new THREE.BoxGeometry(9.2, 1.25, 2.25), hullMat);
+            hull.position.y = 0.35;
+            vessel.add(hull);
+            const fore = new THREE.Mesh(new THREE.ConeGeometry(1.58, 2.2, 4), hullMat);
+            fore.rotation.x = Math.PI / 2;
+            fore.rotation.z = Math.PI / 4;
+            fore.position.set(0, 0.35, 5.05);
+            vessel.add(fore);
+            const deck = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.34, 2.0), deckMat);
+            deck.position.set(0, 1.12, -0.2);
+            vessel.add(deck);
+            const bridge = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.1, 1.55), deckMat);
+            bridge.position.set(0, 2.2, -1.1);
+            vessel.add(bridge);
+            const windows = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.52, 1.61), windowMat);
+            windows.position.set(0, 2.65, -0.95);
+            vessel.add(windows);
+            const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3.1, 6), deckMat);
+            mast.position.set(0, 4.75, -1.2);
+            vessel.add(mast);
+            const radar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.18), windowMat);
+            radar.position.set(0, 5.9, -1.2);
+            vessel.add(radar);
+            const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 1.4, 8), hullMat);
+            stack.position.set(0.92, 2.7, -2.3);
+            vessel.add(stack);
+
+            const wakeMat = new THREE.LineBasicMaterial({ color: 0xbfe9f6, transparent: true, opacity: 0.36 });
+            const wakeGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-0.75, 0.06, -4.1), new THREE.Vector3(-1.7, 0.05, -8.5),
+                new THREE.Vector3(0, 0.06, -4.5), new THREE.Vector3(0, 0.05, -10.0),
+                new THREE.Vector3(0.75, 0.06, -4.1), new THREE.Vector3(1.7, 0.05, -8.5)
+            ]);
+            const wake = new THREE.LineSegments(wakeGeo, wakeMat);
+            vessel.add(wake);
+
+            surfaceSceneryGroup.add(vessel);
+            scenicVessels.push({ mesh: vessel, x, z, startX: x, startZ: z, dx: dx * 0.12, dz: dz * 0.12, phase: Math.random() * Math.PI * 2, radius: Math.hypot(x, z) });
+        }
+
+        function buildUnderwaterScenery() {
+            underwaterSceneryGroup = new THREE.Group();
+            underwaterSceneryGroup.name = 'Seabed reef, kelp and fish';
+            scene.add(underwaterSceneryGroup);
+
+            const coralMaterials = [
+                new THREE.MeshStandardMaterial({ color: 0x2b6972, roughness: 0.88, flatShading: true, emissive: 0x08242b, emissiveIntensity: 0.25 }),
+                new THREE.MeshStandardMaterial({ color: 0x8a6254, roughness: 0.92, flatShading: true }),
+                new THREE.MeshStandardMaterial({ color: 0x486b62, roughness: 0.9, flatShading: true })
+            ];
+            const kelpMat = new THREE.MeshStandardMaterial({ color: 0x287c69, roughness: 0.78, side: THREE.DoubleSide, emissive: 0x062a23, emissiveIntensity: 0.22 });
+            const coralGeo = new THREE.IcosahedronGeometry(1, 1);
+            const branchGeo = new THREE.CylinderGeometry(0.12, 0.28, 1, 6);
+            const kelpGeo = new THREE.PlaneGeometry(0.7, 5, 1, 5);
+
+            const reefSites = [
+                [-34, -21], [-36, 17], [-31, 28], [34, -22], [37, 18], [30, 27],
+                [-16, -25], [14, 26], [-42, 0], [44, 1], [0, -29], [0, 31]
+            ];
+            reefSites.forEach(([x, z], siteIndex) => {
+                const reef = new THREE.Group();
+                reef.position.set(x, getSeabedHeightAt(x, z) + 0.35, z);
+                reef.rotation.y = siteIndex * 0.73;
+                for (let i = 0; i < 4; i++) {
+                    const coral = new THREE.Mesh(coralGeo, coralMaterials[(siteIndex + i) % coralMaterials.length]);
+                    coral.position.set((i - 1.5) * 0.62, 0.3 + (i % 2) * 0.15, Math.sin(i * 2.3) * 0.42);
+                    coral.scale.set(0.48 + (i % 2) * 0.2, 0.8 + (i % 3) * 0.36, 0.45);
+                    reef.add(coral);
+                }
+                for (let i = 0; i < 3; i++) {
+                    const branch = new THREE.Mesh(branchGeo, coralMaterials[(siteIndex + 1) % coralMaterials.length]);
+                    branch.position.set(Math.cos(i * 2.1) * 0.45, 1.0 + (i % 2) * 0.25, Math.sin(i * 2.1) * 0.35);
+                    branch.rotation.z = (i - 1) * 0.42;
+                    reef.add(branch);
+                }
+                for (let i = 0; i < 2; i++) {
+                    const kelp = new THREE.Mesh(kelpGeo, kelpMat);
+                    kelp.position.set(-0.7 + i * 1.4, 2.7, -0.4);
+                    kelp.rotation.y = i * 1.2;
+                    kelp.userData.swayPhase = siteIndex + i * 1.6;
+                    reef.add(kelp);
+                }
+                reef.userData.kelp = reef.children.filter(child => child.geometry === kelpGeo);
+                underwaterSceneryGroup.add(reef);
+            });
+
+            const fishMat = new THREE.MeshStandardMaterial({ color: 0x77cde3, emissive: 0x124459, emissiveIntensity: 0.45, metalness: 0.2, roughness: 0.42 });
+            const fishGeo = new THREE.SphereGeometry(0.3, 10, 8);
+            const tailGeo = new THREE.ConeGeometry(0.18, 0.42, 5);
+            for (let school = 0; school < 4; school++) {
+                const shoal = new THREE.Group();
+                for (let fishIndex = 0; fishIndex < 5; fishIndex++) {
+                    const fish = new THREE.Group();
+                    const body = new THREE.Mesh(fishGeo, fishMat);
+                    body.scale.set(1.35, 0.55, 0.65);
+                    fish.add(body);
+                    const tail = new THREE.Mesh(tailGeo, fishMat);
+                    tail.rotation.x = Math.PI / 2;
+                    tail.position.z = -0.42;
+                    fish.add(tail);
+                    fish.position.set((fishIndex - 2) * 1.0, Math.sin(fishIndex * 2.2) * 0.35, (fishIndex % 2) * 0.8);
+                    fish.scale.setScalar(0.58 + (fishIndex % 3) * 0.1);
+                    shoal.add(fish);
+                }
+                shoal.position.set((school % 2 ? 1 : -1) * (31 + school * 2), -10 - (school % 2) * 3, (school - 1.5) * 12);
+                underwaterSceneryGroup.add(shoal);
+                scenicFish.push({ mesh: shoal, phase: school * 1.7, direction: school % 2 ? 1 : -1, originX: shoal.position.x });
+            }
+            underwaterSceneryGroup.visible = false;
         }
 
         function buildRealisticOcean() {
@@ -3241,6 +3502,8 @@
 
             if (submerged !== isCameraUnderwater) {
                 isCameraUnderwater = submerged;
+                if (surfaceSceneryGroup) surfaceSceneryGroup.visible = !submerged;
+                if (underwaterSceneryGroup) underwaterSceneryGroup.visible = submerged;
                 const overlay = document.getElementById('underwater-overlay');
                 const subBtn = document.getElementById('cam-submerge');
 
@@ -3434,6 +3697,39 @@
             if (seabedUniforms) seabedUniforms.uTime.value = elapsed;
             updateUnderwaterEnvironment(elapsed, dt);
             updateWeatherEffects(elapsed, dt);
+
+            scenicVessels.forEach(vessel => {
+                vessel.x += vessel.dx * dt;
+                vessel.z += vessel.dz * dt;
+                if (Math.hypot(vessel.x, vessel.z) > vessel.radius + 12) {
+                    vessel.x = vessel.startX - vessel.dx * 24;
+                    vessel.z = vessel.startZ - vessel.dz * 24;
+                }
+                vessel.mesh.position.set(
+                    vessel.x,
+                    getOceanHeightAt(vessel.x, vessel.z, elapsed) + 0.12 + Math.sin(elapsed * 1.4 + vessel.phase) * 0.045,
+                    vessel.z
+                );
+            });
+            scenicBeacons.forEach(beacon => {
+                beacon.light.intensity = beacon.base * (0.76 + Math.sin(elapsed * 2.2 + beacon.phase) * 0.24);
+                if (beacon.buoy) {
+                    beacon.buoy.position.y = getOceanHeightAt(beacon.buoy.position.x, beacon.buoy.position.z, elapsed) + Math.sin(elapsed * 1.8 + beacon.phase) * 0.06;
+                }
+            });
+            if (underwaterSceneryGroup) {
+                underwaterSceneryGroup.children.forEach((reef, index) => {
+                    (reef.userData.kelp || []).forEach((kelp, kelpIndex) => {
+                        kelp.rotation.z = Math.sin(elapsed * 0.8 + kelp.userData.swayPhase) * 0.12;
+                        kelp.rotation.x = Math.cos(elapsed * 0.65 + index + kelpIndex) * 0.06;
+                    });
+                });
+            }
+            scenicFish.forEach(school => {
+                school.mesh.position.x = school.originX + Math.sin(elapsed * 0.22 + school.phase) * 7.5 * school.direction;
+                school.mesh.position.y += Math.sin(elapsed * 1.4 + school.phase) * dt * 0.5;
+                school.mesh.rotation.y = Math.sin(elapsed * 0.22 + school.phase) * 0.34 + (school.direction < 0 ? Math.PI : 0);
+            });
 
             for (let pNum = 1; pNum <= 2; pNum++) {
                 const pState = gameState.players[pNum];

@@ -123,6 +123,39 @@
             padding: 16px;
         }
 
+        .review-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            pointer-events: none;
+            background: linear-gradient(90deg, transparent 52%, rgba(7, 10, 16, 0.18) 68%, rgba(7, 10, 16, 0.36));
+        }
+
+        body.review-mode #hud { display: none; }
+
+        .review-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            bottom: 10px;
+            width: min(410px, 36vw);
+            min-width: 350px;
+            display: flex;
+            flex-direction: column;
+            background: rgba(26, 24, 23, 0.82);
+            border-color: rgba(226, 214, 194, 0.22);
+            pointer-events: auto;
+        }
+
+        .review-move-row { cursor: pointer; }
+        .review-move-row:hover { background: rgba(255, 255, 255, 0.08); }
+        .review-move-row.review-selected { background: rgba(120, 178, 94, 0.24); box-shadow: inset 2px 0 #8bc66b; }
+
+        @media (max-width: 760px) {
+            .review-overlay { background: rgba(7, 10, 16, 0.2); }
+            .review-panel { inset: 0 0 0 auto; width: min(100%, 430px); min-width: 0; border-radius: 0; }
+        }
+
         #toast-banner {
             transition: opacity 0.25s ease, transform 0.25s ease;
         }
@@ -302,25 +335,45 @@
     </div>
 
     <!-- Stockfish move review -->
-    <div id="review-modal" class="modal-overlay hidden">
-        <div class="glass-card rounded-2xl max-w-2xl w-full max-h-[88vh] p-5 sm:p-6 border-emerald-400/40 flex flex-col">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <div class="font-mono-chess text-[10px] uppercase tracking-[.2em] text-emerald-300">Stockfish 19</div>
-                    <h2 class="font-serif-display text-xl sm:text-2xl font-bold text-white mt-1">GAME REVIEW</h2>
-                    <p id="review-status" class="text-xs text-slate-300 mt-1">Analyse each move to see its rating.</p>
+    <div id="review-modal" class="review-overlay hidden">
+        <aside class="review-panel glass-card rounded-2xl p-3 sm:p-4">
+            <header class="flex items-center gap-2 border-b border-white/10 pb-3">
+                <button onclick="closeReviewModal()" class="chess-btn rounded-lg w-9 h-8 text-lg" title="Back to game">←</button>
+                <div class="flex-1 text-center">
+                    <div class="font-serif-display text-sm font-bold text-white">GAME REVIEW</div>
+                    <div class="text-[9px] text-emerald-200 uppercase tracking-[.18em]">Stockfish 19 analysis</div>
                 </div>
-                <button onclick="closeReviewModal()" class="chess-btn rounded-lg px-3 py-1.5 text-xs">CLOSE</button>
+                <button id="review-run-btn" onclick="runGameReview()" class="chess-btn chess-btn-active rounded-lg px-2.5 h-8 text-[10px] font-bold">ANALYSE</button>
+            </header>
+            <p id="review-status" class="text-[10px] text-slate-300 py-2">Select a move to inspect the position.</p>
+            <section class="rounded-xl bg-white/10 border border-white/10 p-3 min-h-[112px]">
+                <div class="flex items-center justify-between gap-2">
+                    <div id="review-current-rating" class="font-semibold text-sm text-white">Game review</div>
+                    <div id="review-current-eval" class="font-mono-chess text-sm text-emerald-200">—</div>
+                </div>
+                <p id="review-current-feedback" class="text-[11px] text-slate-200 leading-relaxed mt-2">Run Stockfish analysis to see move feedback and the recommended continuation.</p>
+                <div id="review-best-line" class="text-[10px] text-amber-100 mt-2"></div>
+            </section>
+            <div class="flex items-center justify-between mt-3 mb-1">
+                <span class="text-[10px] uppercase tracking-wider text-slate-300">Move list</span>
+                <span id="review-ply-label" class="font-mono-chess text-[10px] text-slate-400">0 / 0</span>
             </div>
-            <div id="review-summary" class="hidden mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
-            <div id="review-list" class="mt-4 flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
-                <div class="rounded-xl bg-slate-950/50 border border-slate-800 p-4 text-sm text-slate-400">Play some moves, then start a review.</div>
+            <div id="review-list" class="flex-1 min-h-0 overflow-y-auto rounded-lg bg-black/25 border border-white/10 p-2 font-mono-chess text-[11px]">
+                <div class="text-slate-400 p-2">Play some moves, then analyse the game.</div>
             </div>
-            <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-700/70 pt-3">
-                <span class="text-[10px] text-slate-400">Stockfish runs locally in your browser.</span>
-                <button id="review-run-btn" onclick="runGameReview()" class="chess-btn chess-btn-active rounded-xl px-4 py-2 text-xs font-bold">ANALYSE GAME</button>
+            <div class="mt-3 rounded-xl bg-black/30 border border-white/10 p-2">
+                <div class="text-center text-[9px] text-slate-400">White advantage ↑ &nbsp; · &nbsp; Even &nbsp; · &nbsp; Black advantage ↓</div>
+                <svg id="review-graph" viewBox="0 0 360 76" class="w-full h-[72px] mt-1" role="img" aria-label="Evaluation graph by move"></svg>
             </div>
-        </div>
+            <div class="grid grid-cols-5 gap-1.5 mt-2">
+                <button onclick="navigateReview(0)" class="chess-btn rounded-lg py-2 text-sm" title="First position">|&lt;</button>
+                <button onclick="navigateReview(app.reviewPly - 1)" class="chess-btn rounded-lg py-2 text-sm" title="Previous move">&lt;</button>
+                <button onclick="toggleReviewAutoplay()" id="review-play-btn" class="chess-btn rounded-lg py-2 text-sm" title="Play through moves">&#9654;</button>
+                <button onclick="navigateReview(app.reviewPly + 1)" class="chess-btn rounded-lg py-2 text-sm" title="Next move">&gt;</button>
+                <button onclick="navigateReview(app.historyStack.length)" class="chess-btn rounded-lg py-2 text-sm" title="Last move">&gt;|</button>
+            </div>
+            <div class="flex justify-between items-center mt-2 text-[9px] text-slate-400"><span>Click a move or graph point to jump to it.</span><span>Depth 12</span></div>
+        </aside>
     </div>
 
     <script>
@@ -865,6 +918,28 @@
             return { name: 'Blunder', style: 'text-rose-200 bg-rose-400/10 border-rose-300/20' };
         }
 
+        function formatReviewEval(cp) {
+            if (!Number.isFinite(cp)) return '—';
+            if (Math.abs(cp) >= 90000) {
+                const movesToMate = Math.max(1, Math.round((100000 - Math.abs(cp)) / 1000));
+                return `${cp > 0 ? '+' : '-'}M${movesToMate}`;
+            }
+            const pawns = Math.abs(cp) / 100;
+            return `${cp > 0 ? '+' : cp < 0 ? '−' : ''}${pawns.toFixed(1)}`;
+        }
+
+        function reviewFeedback(review) {
+            if (!review) return '';
+            const bestMove = review.bestSan && review.bestSan !== '—'
+                ? `Engine preferred <strong class="text-white">${review.bestSan}</strong>. `
+                : '';
+            if (review.rating === 'Best') return `${bestMove}This move keeps the position at its strongest.`;
+            if (review.rating === 'Good') return `${bestMove}A sound choice with only a small change in the position.`;
+            if (review.rating === 'Inaccuracy') return `${bestMove}A better continuation was available; this move lets the evaluation shift against you.`;
+            if (review.rating === 'Mistake') return `${bestMove}This noticeably worsens your position. Look for the engine's continuation next time.`;
+            return `${bestMove}This causes a major evaluation swing. Compare the suggested continuation with your move.`;
+        }
+
         // =====================================================================
         // APPLICATION STATE & THREE.JS SCENE
         // =====================================================================
@@ -884,6 +959,8 @@
             isGameOver: false,
             pendingPromotionMove: null,
             isReviewing: false,
+            isReviewMode: false,
+            reviewPly: 0,
             reviewToken: 0
         };
 
@@ -894,6 +971,9 @@
 
         let activePieceAnim = null; // { group, startPos, endPos, arcHeight, progress, duration, onComplete }
         let camTween = null; // { startPos, endPos, startTarget, endTarget, progress, duration }
+        let reviewCameraState = null;
+        let reviewAutoplayTimer = null;
+        let reviewCameraShift = 4.1;
 
         function squareToWorld(r, c, y = 0) {
             const half = BOARD_SPAN * 0.5 - SQUARE_SIZE * 0.5;
@@ -1216,8 +1296,10 @@
             const state = app.gameState;
 
             // Last move highlight
-            if (app.historyStack.length > 0) {
-                const last = app.historyStack[app.historyStack.length - 1].move;
+            const shownPly = app.isReviewMode ? app.reviewPly : app.historyStack.length;
+            if (shownPly > 0) {
+                const lastRecord = app.historyStack[shownPly - 1];
+                const last = lastRecord.move;
                 for (const sq of [last.from, last.to]) {
                     const wp = squareToWorld(sq.r, sq.c, 0.012);
                     const plane = new THREE.Mesh(
@@ -1231,6 +1313,20 @@
                     );
                     plane.position.copy(wp);
                     highlightsGroup.add(plane);
+                }
+                if (app.isReviewMode && lastRecord.review?.bestUci) {
+                    const suggested = findLegalMoveByUci(lastRecord.state, lastRecord.review.bestUci);
+                    if (suggested) {
+                        const start = squareToWorld(suggested.from.r, suggested.from.c, 0.18);
+                        const end = squareToWorld(suggested.to.r, suggested.to.c, 0.18);
+                        const direction = end.clone().sub(start);
+                        const arrow = new THREE.ArrowHelper(direction.clone().normalize(), start, direction.length() * 0.82, 0xffb000, 0.62, 0.38);
+                        arrow.line.material.transparent = true;
+                        arrow.line.material.opacity = 0.88;
+                        arrow.cone.material.transparent = true;
+                        arrow.cone.material.opacity = 0.92;
+                        highlightsGroup.add(arrow);
+                    }
                 }
             }
 
@@ -1307,7 +1403,7 @@
         // MOVE EXECUTION, ANIMATIONS & UI SYNC
         // =====================================================================
         function isHumanTurn() {
-            if (app.isGameOver || app.isAnimatingMove || app.isReviewing) return false;
+            if (app.isGameOver || app.isAnimatingMove || app.isReviewing || app.isReviewMode) return false;
             if (app.gameMode === 'LOCAL') return true;
             return app.gameState.turn !== app.botColor;
         }
@@ -1443,6 +1539,7 @@
         }
 
         function onBoardClick(e) {
+            if (app.isReviewMode) return;
             if (e.button !== 0) return;
             if (!isHumanTurn()) return;
 
@@ -1519,7 +1616,7 @@
         }
 
         function undoLastMove() {
-            if (app.isAnimatingMove || app.isReviewing || app.historyStack.length === 0) return;
+            if (app.isAnimatingMove || app.isReviewing || app.isReviewMode || app.historyStack.length === 0) return;
             app.isGameOver = false;
             app.reviewToken++;
             app.isReviewing = false;
@@ -1609,7 +1706,7 @@
             }
 
             // Auto-flip camera in Local 2P
-            if (app.autoFlip && app.gameMode === 'LOCAL' && !app.isGameOver) {
+            if (!app.isReviewMode && app.autoFlip && app.gameMode === 'LOCAL' && !app.isGameOver) {
                 const desired = st.turn === 'w' ? 'WHITE' : 'BLACK';
                 if (app.cameraPreset !== desired) {
                     setCameraPreset(desired);
@@ -1620,22 +1717,47 @@
         function openReviewModal() {
             app.reviewToken++;
             app.isReviewing = false;
-            renderReviewRows();
+            app.isReviewMode = true;
+            app.reviewPly = app.historyStack.length;
+            reviewCameraShift = window.innerWidth < 760 ? 1.7 : 4.1;
+            reviewCameraState = { position: camera.position.clone(), target: controls.target.clone() };
+            camera.position.x += reviewCameraShift;
+            controls.target.x += reviewCameraShift;
+            controls.update();
+            document.body.classList.add('review-mode');
+            document.getElementById('gameover-modal').classList.add('hidden');
+            document.getElementById('review-modal').classList.remove('hidden');
             document.getElementById('review-status').textContent = app.historyStack.length
-                ? `${app.historyStack.length} move${app.historyStack.length === 1 ? '' : 's'} ready to analyse.`
+                ? `${app.historyStack.length} half-moves · choose a move to see its position and best line.`
                 : 'Play some moves before starting a review.';
             document.getElementById('review-run-btn').disabled = app.historyStack.length === 0;
-            document.getElementById('review-run-btn').textContent = 'ANALYSE GAME';
-            document.getElementById('review-modal').classList.remove('hidden');
+            document.getElementById('review-run-btn').textContent = app.historyStack.every(record => record.review) ? 'REANALYSE' : 'ANALYSE';
+            renderReviewRows();
+            showReviewPly(app.reviewPly);
             updateHUD();
         }
 
         function closeReviewModal() {
             app.reviewToken++;
             app.isReviewing = false;
+            app.isReviewMode = false;
+            stopReviewAutoplay();
             document.getElementById('review-modal').classList.add('hidden');
-            document.getElementById('review-run-btn').disabled = app.historyStack.length === 0;
-            document.getElementById('review-run-btn').textContent = 'ANALYSE GAME';
+            document.body.classList.remove('review-mode');
+            if (app.isGameOver) document.getElementById('gameover-modal').classList.remove('hidden');
+            if (app.historyStack.length) {
+                const last = app.historyStack[app.historyStack.length - 1];
+                app.gameState = applyMoveToState(last.state, last.move);
+            } else app.gameState = createInitialBoard();
+            app.selectedSquare = null;
+            app.legalForSelected = [];
+            rebuildPiecesFromState();
+            if (reviewCameraState) {
+                camera.position.copy(reviewCameraState.position);
+                controls.target.copy(reviewCameraState.target);
+                controls.update();
+                reviewCameraState = null;
+            }
             updateHUD();
         }
 
@@ -1657,11 +1779,20 @@
                 const badge = rating
                     ? `<span class="rounded-full border px-2 py-0.5 text-[10px] font-semibold ${rating.style}">${rating.rating}</span>`
                     : '<span class="text-[10px] text-slate-500">Not analysed</span>';
-                const loss = rating ? `<span class="font-mono-chess text-[10px] text-slate-400">${rating.loss >= 1000 ? 'Mate swing' : `${Math.round(rating.loss)} cp lost`}</span>` : '';
-                return `<div class="flex items-center gap-3 rounded-xl bg-slate-950/45 border border-slate-800/80 px-3 py-2">
+                const loss = rating ? `<span class="font-mono-chess text-[10px] text-slate-400">${rating.loss >= 99000 ? 'mate changed' : `${Math.round(rating.loss)} cp lost`}</span>` : '';
+                const details = rating ? `<div class="mt-2 w-full rounded-lg bg-black/20 px-3 py-2.5">
+                    <p class="text-[11px] leading-relaxed text-slate-300">${reviewFeedback(rating)}</p>
+                    <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono-chess text-[10px] text-slate-400">
+                        <span>Before <strong class="text-slate-200">${formatReviewEval(rating.beforeWhite)} ${rating.beforeWhite >= 0 ? 'White' : 'Black'}</strong></span>
+                        <span>After <strong class="text-slate-200">${formatReviewEval(rating.afterWhite)} ${rating.afterWhite >= 0 ? 'White' : 'Black'}</strong></span>
+                        ${rating.bestSan && rating.bestSan !== '—' ? `<span>Best move <strong class="text-emerald-200">${rating.bestSan}</strong></span>` : ''}
+                    </div>
+                </div>` : '';
+                return `<div class="flex flex-wrap items-center gap-3 rounded-xl bg-slate-950/45 border border-slate-800/80 px-3 py-2">
                     <span class="font-mono-chess text-[10px] text-slate-500 w-9">${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '…'}</span>
                     <span class="text-xs ${side === 'White' ? 'text-amber-100' : 'text-sky-200'} flex-1">${side} · ${record.san}</span>
                     ${loss}${badge}
+                    ${details}
                 </div>`;
             }).join('');
 
@@ -1676,6 +1807,95 @@
             }
         }
 
+        // Review-mode presentation: paired notation, evaluation graph, and position stepping.
+        function renderReviewRows() {
+            const list = document.getElementById('review-list');
+            const records = app.historyStack;
+            if (!records.length) {
+                list.innerHTML = '<div class="text-slate-400 p-2">Play some moves, then analyse the game.</div>';
+                renderReviewGraph();
+                return;
+            }
+            let rows = '';
+            for (let i = 0; i < records.length; i += 2) {
+                const white = records[i], black = records[i + 1];
+                const wb = white.review ? `<span class="text-[9px] ml-1 ${white.review.style.split(' ')[0]}">${white.review.rating}</span>` : '';
+                const bb = black?.review ? `<span class="text-[9px] ml-1 ${black.review.style.split(' ')[0]}">${black.review.rating}</span>` : '';
+                rows += `<div class="grid grid-cols-[28px_1fr_1fr] items-center gap-1 mb-1">
+                    <span class="text-slate-500 text-[10px]">${Math.floor(i / 2) + 1}.</span>
+                    <button onclick="navigateReview(${i + 1})" class="review-move-row ${app.reviewPly === i + 1 ? 'review-selected' : ''} rounded-md text-left px-2 py-1 text-amber-100">${white.san}${wb}</button>
+                    ${black ? `<button onclick="navigateReview(${i + 2})" class="review-move-row ${app.reviewPly === i + 2 ? 'review-selected' : ''} rounded-md text-left px-2 py-1 text-sky-100">${black.san}${bb}</button>` : '<span></span>'}
+                </div>`;
+            }
+            list.innerHTML = rows;
+            renderReviewGraph();
+        }
+
+        function showReviewPly(ply) {
+            app.reviewPly = Math.max(0, Math.min(app.historyStack.length, ply));
+            if (app.reviewPly === 0) app.gameState = createInitialBoard();
+            else app.gameState = app.historyStack[app.reviewPly - 1].state;
+            app.selectedSquare = null;
+            app.legalForSelected = [];
+            rebuildPiecesFromState();
+            document.getElementById('review-ply-label').textContent = `${app.reviewPly} / ${app.historyStack.length}`;
+            const selected = app.reviewPly > 0 ? app.historyStack[app.reviewPly - 1] : null;
+            const review = selected?.review;
+            document.getElementById('review-current-rating').textContent = selected
+                ? `${Math.floor((app.reviewPly - 1) / 2) + 1}${app.reviewPly % 2 ? '.' : '…'} ${selected.san}${review ? ` · ${review.rating}` : ''}`
+                : 'Starting position';
+            const evalCp = review ? review.afterWhite : (app.historyStack[0]?.review?.beforeWhite ?? null);
+            document.getElementById('review-current-eval').textContent = Number.isFinite(evalCp)
+                ? `${formatReviewEval(evalCp)} ${evalCp >= 0 ? 'White' : 'Black'}` : '—';
+            document.getElementById('review-current-feedback').innerHTML = review
+                ? reviewFeedback(review)
+                : 'Run Stockfish analysis to see move quality, evaluation changes and the recommended continuation.';
+            document.getElementById('review-best-line').textContent = review
+                ? `Engine: ${review.bestSan || '—'}${selected && review.bestSan === selected.san ? ' · played' : ''}   Eval ${formatReviewEval(review.beforeWhite)} → ${formatReviewEval(review.afterWhite)}   ·   ${review.loss >= 99000 ? 'mate swing' : `${Math.round(review.loss)} cp loss`}`
+                : '';
+            renderReviewRows();
+            updateHUD();
+        }
+
+        function navigateReview(ply) {
+            stopReviewAutoplay();
+            showReviewPly(ply);
+        }
+
+        function stopReviewAutoplay() {
+            if (reviewAutoplayTimer) clearInterval(reviewAutoplayTimer);
+            reviewAutoplayTimer = null;
+            const button = document.getElementById('review-play-btn');
+            if (button) button.innerHTML = '&#9654;';
+        }
+
+        function toggleReviewAutoplay() {
+            if (reviewAutoplayTimer) { stopReviewAutoplay(); return; }
+            if (app.reviewPly >= app.historyStack.length) showReviewPly(0);
+            document.getElementById('review-play-btn').innerHTML = '&#10074;&#10074;';
+            reviewAutoplayTimer = setInterval(() => {
+                if (app.reviewPly >= app.historyStack.length) { stopReviewAutoplay(); return; }
+                showReviewPly(app.reviewPly + 1);
+            }, 950);
+        }
+
+        function renderReviewGraph() {
+            const svg = document.getElementById('review-graph');
+            const total = app.historyStack.length;
+            let runningEval = app.historyStack[0]?.review?.beforeWhite ?? 0;
+            const values = [runningEval];
+            app.historyStack.forEach(record => {
+                if (Number.isFinite(record.review?.afterWhite)) runningEval = record.review.afterWhite;
+                values.push(runningEval);
+            });
+            const width = 360, height = 76, baseline = height / 2, pad = 8;
+            const xAt = index => total ? pad + (index / total) * (width - pad * 2) : width / 2;
+            const yAt = value => baseline - Math.max(-600, Math.min(600, value)) / 600 * (baseline - 8);
+            const points = values.map((value, index) => `${xAt(index)},${yAt(value)}`).join(' ');
+            const markers = values.map((value, index) => `<circle cx="${xAt(index)}" cy="${yAt(value)}" r="${index === app.reviewPly ? 4.5 : 3}" fill="${index === app.reviewPly ? '#f8fafc' : (value >= 0 ? '#8bc66b' : '#d9a675')}" stroke="#17202b" stroke-width="1.5" onclick="navigateReview(${index})" style="cursor:pointer"><title>Position ${index}: ${formatReviewEval(value)}</title></circle>`).join('');
+            svg.innerHTML = `<line x1="0" y1="${baseline}" x2="${width}" y2="${baseline}" stroke="rgba(255,255,255,.35)" stroke-width="1"/><polyline points="${points}" fill="none" stroke="#9aa7b7" stroke-width="2" stroke-linejoin="round"/>${markers}`;
+        }
+
         async function runGameReview() {
             if (app.historyStack.length === 0 || app.isReviewing) return;
             const runToken = ++app.reviewToken;
@@ -1683,7 +1903,6 @@
             app.isReviewing = true;
             document.getElementById('review-run-btn').disabled = true;
             document.getElementById('review-run-btn').textContent = 'ANALYSING…';
-            document.getElementById('review-summary').classList.add('hidden');
             app.historyStack.forEach(record => { record.review = null; });
             renderReviewRows();
             updateHUD();
@@ -1694,23 +1913,30 @@
                     for (let index = 0; index < moves.length; index++) {
                         if (app.reviewToken !== runToken) return;
                         document.getElementById('review-status').textContent = `Reviewing move ${index + 1} of ${moves.length}…`;
-                        const before = await stockfishSearch(moves.slice(0, index), { depth: 10, skill: 20 });
+                        const before = await stockfishSearch(moves.slice(0, index), { depth: 12, skill: 20 });
                         if (app.reviewToken !== runToken || !Number.isFinite(before.score)) return;
                         const record = app.historyStack[index];
                         let loss = 0;
+                        let afterScore = -before.score;
                         if (!record.san.includes('#')) {
-                            const after = await stockfishSearch(moves.slice(0, index + 1), { depth: 10, skill: 20 });
+                            const after = await stockfishSearch(moves.slice(0, index + 1), { depth: 12, skill: 20 });
                             if (app.reviewToken !== runToken || !Number.isFinite(after.score)) return;
                             loss = Math.max(0, before.score + after.score);
+                            afterScore = after.score;
                         }
                         const assessment = rateMoveLoss(loss);
-                        record.review = { rating: assessment.name, style: assessment.style, loss };
-                        renderReviewRows();
-                        updateHUD();
+                        const bestMove = findLegalMoveByUci(record.state, before.bestMove);
+                        const bestSan = bestMove ? formatAlgebraic(record.state, bestMove) : '—';
+                        const beforeWhite = record.state.turn === 'w' ? before.score : -before.score;
+                        const afterTurn = record.state.turn === 'w' ? 'b' : 'w';
+                        const afterWhite = afterTurn === 'w' ? afterScore : -afterScore;
+                        record.review = { rating: assessment.name, style: assessment.style, loss, bestSan, bestUci: before.bestMove, beforeWhite, afterWhite };
+                        if (app.reviewPly === index + 1) showReviewPly(app.reviewPly);
+                        else renderReviewRows();
                     }
                 });
                 if (app.reviewToken === runToken) {
-                    document.getElementById('review-status').textContent = `Review complete · each move checked by Stockfish at depth 10.`;
+                    document.getElementById('review-status').textContent = `Review complete · each position checked by Stockfish at depth 12. Scores are shown from White's perspective.`;
                 }
             } catch (error) {
                 console.error('Stockfish review error:', error);
@@ -1721,7 +1947,7 @@
                 if (app.reviewToken === runToken) {
                     app.isReviewing = false;
                     document.getElementById('review-run-btn').disabled = false;
-                    document.getElementById('review-run-btn').textContent = 'REVIEW AGAIN';
+                    document.getElementById('review-run-btn').textContent = 'REANALYSE';
                     updateHUD();
                 }
             }
@@ -1743,11 +1969,12 @@
                 endPos = new THREE.Vector3(0, 18.5, 0.01);
             }
 
+            const reviewShift = app.isReviewMode ? reviewCameraShift : 0;
             camTween = {
                 startPos: camera.position.clone(),
-                endPos,
+                endPos: endPos.clone().add(new THREE.Vector3(reviewShift, 0, 0)),
                 startTarget: controls.target.clone(),
-                endTarget: new THREE.Vector3(0, 0.2, 0),
+                endTarget: new THREE.Vector3(reviewShift, 0.2, 0),
                 progress: 0,
                 duration: 0.65
             };
@@ -1815,6 +2042,9 @@
         function startGameFromSetup() {
             app.reviewToken++;
             app.isReviewing = false;
+            app.isReviewMode = false;
+            stopReviewAutoplay();
+            document.body.classList.remove('review-mode');
             document.getElementById('review-modal').classList.add('hidden');
             document.getElementById('setup-modal').classList.add('hidden');
             document.getElementById('gameover-modal').classList.add('hidden');
@@ -1848,6 +2078,12 @@
         // KEYBOARD & RENDER LOOP
         // =====================================================================
         function onKeyDown(e) {
+            if (app.isReviewMode) {
+                if (e.key === 'Escape') closeReviewModal();
+                else if (e.key === 'ArrowLeft') navigateReview(app.reviewPly - 1);
+                else if (e.key === 'ArrowRight') navigateReview(app.reviewPly + 1);
+                return;
+            }
             if (e.key === '1') setCameraPreset('WHITE');
             else if (e.key === '2') setCameraPreset('BLACK');
             else if (e.key === '3') setCameraPreset('TOP');

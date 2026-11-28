@@ -773,6 +773,7 @@
             // Visual FX pools
             this.particles = [];
             this.shockwaves = [];
+            this.sceneryOwnedMaterials = [];
             this.cameraShake = 0;
             this.hoveredTile = null;
             this.scanWaveTime = -1;
@@ -952,6 +953,34 @@
                     depthWrite: false
                 });
             }
+
+            const signCanvas = document.createElement('canvas'); signCanvas.width = 512; signCanvas.height = 192;
+            const signCtx = signCanvas.getContext('2d');
+            signCtx.fillStyle = '#17212a'; signCtx.fillRect(0, 0, 512, 192);
+            signCtx.fillStyle = '#eab308'; signCtx.fillRect(0, 0, 512, 15); signCtx.fillRect(0, 177, 512, 15);
+            for (let x = -24; x < 512; x += 64) {
+                signCtx.fillStyle = '#111820'; signCtx.beginPath(); signCtx.moveTo(x, 15); signCtx.lineTo(x + 30, 15); signCtx.lineTo(x + 10, 40); signCtx.lineTo(x - 20, 40); signCtx.fill();
+                signCtx.beginPath(); signCtx.moveTo(x + 20, 152); signCtx.lineTo(x + 50, 152); signCtx.lineTo(x + 70, 177); signCtx.lineTo(x + 40, 177); signCtx.fill();
+            }
+            signCtx.fillStyle = '#f8fafc'; signCtx.textAlign = 'center'; signCtx.font = 'bold 44px Arial'; signCtx.fillText('EOD TRAINING RANGE', 256, 103);
+            signCtx.font = 'bold 20px Arial'; signCtx.fillStyle = '#fbbf24'; signCtx.fillText('AUTHORIZED PERSONNEL ONLY', 256, 137);
+            const signTexture = new THREE.CanvasTexture(signCanvas); signTexture.encoding = THREE.sRGBEncoding;
+            this.sceneryMats = {
+                pad: new THREE.MeshStandardMaterial({ color: 0x4b5358, roughness: 0.84, metalness: 0.16 }),
+                padEdge: new THREE.MeshStandardMaterial({ color: 0x85877d, roughness: 0.75, metalness: 0.14 }),
+                hazardYellow: new THREE.MeshStandardMaterial({ color: 0xf2bd26, roughness: 0.6, metalness: 0.18 }),
+                hazardBlack: new THREE.MeshStandardMaterial({ color: 0x181d21, roughness: 0.54, metalness: 0.3 }),
+                barrier: new THREE.MeshStandardMaterial({ color: 0x596168, roughness: 0.78, metalness: 0.22 }),
+                sandbag: new THREE.MeshStandardMaterial({ color: 0x82785f, roughness: 0.96 }),
+                crate: new THREE.MeshStandardMaterial({ color: 0x536047, roughness: 0.82 }),
+                crateTrim: new THREE.MeshStandardMaterial({ color: 0x8b7752, roughness: 0.72, metalness: 0.12 }),
+                metal: new THREE.MeshStandardMaterial({ color: 0x2b333a, roughness: 0.44, metalness: 0.78 }),
+                rock: [0x55544c, 0x68645a, 0x454a48].map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.98 })),
+                scrub: new THREE.MeshStandardMaterial({ color: 0x586348, roughness: 0.96 }),
+                flag: new THREE.MeshStandardMaterial({ color: 0xe14732, roughness: 0.72, side: THREE.DoubleSide }),
+                lamp: new THREE.MeshStandardMaterial({ color: 0xffd990, emissive: 0xffa72f, emissiveIntensity: 1.2, roughness: 0.24 }),
+                sign: new THREE.MeshStandardMaterial({ map: signTexture, roughness: 0.65, metalness: 0.12 })
+            };
         }
 
         buildEnvironment() {
@@ -962,6 +991,11 @@
             ground.position.y = -0.55;
             ground.receiveShadow = true;
             this.scene.add(ground);
+
+            this.sceneryGroup = new THREE.Group();
+            this.scene.add(this.sceneryGroup);
+            this.sceneryAnim = [];
+            this.sceneryLights = [];
 
             // Container groups for dynamic board elements
             this.boardGroup = new THREE.Group();
@@ -983,6 +1017,134 @@
             this.reticleMesh = new THREE.Mesh(reticleGeo, this.reticleMat);
             this.reticleMesh.visible = false;
             this.scene.add(this.reticleMesh);
+        }
+
+        buildScenery(boardWidth, boardDepth) {
+            while (this.sceneryGroup.children.length) {
+                const child = this.sceneryGroup.children[0];
+                this.sceneryGroup.remove(child);
+                child.traverse((part) => part.geometry?.dispose());
+            }
+            this.sceneryAnim = [];
+            this.sceneryLights.forEach((light) => this.scene.remove(light));
+            this.sceneryLights = [];
+            this.sceneryOwnedMaterials.forEach((material) => material.dispose());
+            this.sceneryOwnedMaterials = [];
+
+            const mat = this.sceneryMats;
+            const halfW = boardWidth / 2, halfD = boardDepth / 2;
+            const margin = 3.1;
+            const addMesh = (geometry, material, x, y, z, castShadow = true) => {
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z); mesh.castShadow = castShadow; mesh.receiveShadow = true;
+                this.sceneryGroup.add(mesh); return mesh;
+            };
+
+            // Reinforced work pad and painted warning perimeter.
+            const padW = boardWidth + margin * 2, padD = boardDepth + margin * 2;
+            addMesh(new THREE.BoxGeometry(padW, 0.075, padD), mat.pad, 0, -0.51, 0, false);
+            for (const [horizontal, sign] of [[true, -1], [true, 1], [false, -1], [false, 1]]) {
+                const length = horizontal ? padW - 0.28 : padD - 0.28;
+                const segments = Math.max(8, Math.floor(length / 0.9));
+                for (let i = 0; i < segments; i++) {
+                    const along = -length / 2 + (i + 0.5) * (length / segments);
+                    const x = horizontal ? along : sign * (padW / 2 - 0.12);
+                    const z = horizontal ? sign * (padD / 2 - 0.12) : along;
+                    const stripe = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? length / segments * 0.72 : 0.13, 0.018, horizontal ? 0.13 : length / segments * 0.72), i % 2 ? mat.hazardBlack : mat.hazardYellow);
+                    stripe.position.set(x, -0.46, z); this.sceneryGroup.add(stripe);
+                }
+            }
+
+            // Concrete blast barriers outside the marked operating area.
+            const sideOffset = halfW + margin + 0.72;
+            const endOffset = halfD + margin + 0.72;
+            const barrierH = 0.92;
+            const barriers = [
+                { x: -sideOffset, z: 0, w: 0.72, d: Math.min(boardDepth * 0.58, 8.5) },
+                { x: sideOffset, z: 0, w: 0.72, d: Math.min(boardDepth * 0.58, 8.5) },
+                { x: 0, z: -endOffset, w: Math.min(boardWidth * 0.5, 8), d: 0.72 },
+                { x: 0, z: endOffset, w: Math.min(boardWidth * 0.5, 8), d: 0.72 }
+            ];
+            barriers.forEach((item) => {
+                addMesh(new THREE.BoxGeometry(item.w, barrierH, item.d), mat.barrier, item.x, barrierH / 2 - 0.53, item.z);
+                addMesh(new THREE.BoxGeometry(item.w + (item.d > item.w ? 0.04 : 0), 0.08, item.d + (item.w > item.d ? 0.04 : 0)), mat.hazardYellow, item.x, 0.32, item.z, false);
+                for (let k = -1; k <= 1; k++) {
+                    const stripe = addMesh(new THREE.BoxGeometry(item.w > item.d ? 0.18 : item.w + 0.06, 0.42, item.d > item.w ? 0.18 : item.d + 0.06), mat.hazardBlack, item.x + (item.w > item.d ? k * 0.5 : 0), 0.33, item.z + (item.d > item.w ? k * 0.5 : 0), false);
+                    stripe.rotation.y = Math.PI / 4;
+                }
+            });
+
+            // Sandbag stacks and equipment crates flank the pad.
+            const bagGeo = new THREE.SphereGeometry(0.42, 14, 10);
+            for (const side of [-1, 1]) {
+                const x = side * (halfW + 1.95);
+                for (let row = 0; row < 2; row++) for (let n = 0; n < 3 - row; n++) {
+                    const bag = addMesh(bagGeo, mat.sandbag, x + (n - (2 - row) / 2) * 0.58, -0.315 + row * 0.31, -0.5 + row * 0.16);
+                    bag.scale.set(1.28, 0.56, 0.72); bag.rotation.y = side * 0.12;
+                }
+                const crateX = side * (halfW + 2.1), crateZ = halfD + 1.65;
+                const crate = new THREE.Group(); crate.position.set(crateX, -0.55, crateZ); this.sceneryGroup.add(crate);
+                const box = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.92, 1.05), mat.crate); box.position.y = 0.46; box.castShadow = true; crate.add(box);
+                for (const y of [0.12, 0.8]) {
+                    const strap = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.085, 1.1), mat.crateTrim); strap.position.y = y; crate.add(strap);
+                }
+                for (const z of [-0.28, 0.28]) {
+                    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.73, 1.12), mat.metal); slat.position.set(0, 0.46, z); crate.add(slat);
+                }
+            }
+
+            // A service container and EOD warning placards sit beyond the far edge.
+            const shedW = Math.min(Math.max(boardWidth * 0.48, 5.2), 9.2);
+            const shed = new THREE.Group(); shed.position.set(0, -0.55, -(halfD + 6.5)); this.sceneryGroup.add(shed);
+            const container = new THREE.Mesh(new THREE.BoxGeometry(shedW, 2.6, 2.15), mat.crate); container.position.y = 1.3; container.castShadow = true; container.receiveShadow = true; shed.add(container);
+            for (let y = 0.28; y <= 2.45; y += 0.28) {
+                const rib = new THREE.Mesh(new THREE.BoxGeometry(shedW + 0.08, 0.045, 2.2), mat.metal); rib.position.y = y; shed.add(rib);
+            }
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.1, 0.055), mat.metal); door.position.set(0, 1.05, 1.11); shed.add(door);
+            const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(shedW - 0.5, 5.8), 0.92), mat.sign); sign.position.set(0, 1.84, 1.15); shed.add(sign);
+
+            // Perimeter mast lights, with subtle pulse animation and ground pools.
+            for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+                const x = sx * (halfW + margin + 2.25), z = sz * (halfD + margin + 2.25);
+                addMesh(new THREE.BoxGeometry(0.13, 4.6, 0.13), mat.metal, x, 1.75, z);
+                addMesh(new THREE.BoxGeometry(0.9, 0.13, 0.13), mat.metal, x, 4.0, z);
+                const lampMat = mat.lamp.clone(); this.sceneryOwnedMaterials.push(lampMat);
+                const towerLights = [];
+                for (const lx of [-0.28, 0.28]) {
+                    const bulb = addMesh(new THREE.BoxGeometry(0.25, 0.19, 0.22), lampMat, x + lx, 3.87, z, false);
+                    const point = new THREE.PointLight(0xffbd67, 0.32, 8, 2); point.position.copy(bulb.position); this.scene.add(point); this.sceneryLights.push(point); towerLights.push(point);
+                }
+                this.sceneryAnim.push({ type: 'lamp', material: lampMat, lights: towerLights, phase: (sx + sz + 2) * 1.7 });
+                const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat.flag); beacon.position.set(x, 4.23, z); this.sceneryGroup.add(beacon);
+                this.sceneryAnim.push({ type: 'beacon', mesh: beacon, phase: (sx - sz + 2) * 2.1 });
+            }
+
+            const pennantShape = new THREE.Shape(); pennantShape.moveTo(0, 0); pennantShape.lineTo(0.72, -0.12); pennantShape.lineTo(0, -0.42); pennantShape.closePath();
+            const pennantGeo = new THREE.ShapeGeometry(pennantShape);
+            for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+                const x = sx * (halfW + margin + 0.55), z = sz * (halfD + margin + 0.55);
+                addMesh(new THREE.CylinderGeometry(0.035, 0.05, 1.65, 8), mat.metal, x, 0.27, z);
+                const pennant = addMesh(pennantGeo, mat.flag, x + 0.08, 0.99, z, false);
+                pennant.rotation.y = sx * sz * 0.18;
+                this.sceneryAnim.push({ type: 'flag', mesh: pennant, phase: (sx + sz + 2) * 1.35, base: pennant.rotation.y });
+            }
+
+            // Scattered rocks and tough scrub break up the endless concrete around the range.
+            const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+            const scrubGeo = new THREE.ConeGeometry(0.16, 0.72, 5);
+            for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2 + 0.11;
+                const rx = halfW + margin + 4.1 + (i % 3) * 0.55;
+                const rz = halfD + margin + 3.6 + (i % 4) * 0.42;
+                const x = Math.sin(angle) * rx, z = Math.cos(angle) * rz;
+                const rock = addMesh(rockGeo, mat.rock[i % mat.rock.length], x, -0.24, z, false);
+                rock.scale.set(0.45 + (i % 4) * 0.12, 0.22 + (i % 3) * 0.1, 0.35 + (i % 5) * 0.1);
+                if (i % 2 === 0) {
+                    const scrub = addMesh(scrubGeo, mat.scrub, x + 0.55, -0.16, z - 0.25, false);
+                    scrub.scale.set(0.7 + (i % 3) * 0.2, 0.6 + (i % 2) * 0.25, 0.7);
+                    scrub.rotation.z = Math.sin(i * 2.3) * 0.25;
+                }
+            }
         }
 
         /**
@@ -1111,6 +1273,10 @@
 
             const boardWidth = this.cols * this.step;
             const boardDepth = this.rows * this.step;
+            if (!this.sceneryDimensions || this.sceneryDimensions.width !== boardWidth || this.sceneryDimensions.depth !== boardDepth) {
+                this.buildScenery(boardWidth, boardDepth);
+                this.sceneryDimensions = { width: boardWidth, depth: boardDepth };
+            }
 
             // 1. Heavy armored chassis base slab
             const chassisGeo = new THREE.BoxGeometry(boardWidth + 0.9, 0.55, boardDepth + 0.9);
@@ -1971,6 +2137,21 @@
                 sw.mesh.scale.set(scale, scale, 1);
                 sw.mesh.material.opacity = (1 - progress) * 0.85;
             }
+
+            // Wind moves the range pennants while perimeter beacons pulse softly.
+            this.sceneryAnim.forEach((item) => {
+                if (item.type === 'lamp') {
+                    const pulse = 0.78 + (0.5 + 0.5 * Math.sin(elapsed * 2.4 + item.phase)) * 0.42;
+                    item.material.emissiveIntensity = pulse;
+                    item.lights.forEach((light) => { light.intensity = 0.16 + pulse * 0.17; });
+                } else if (item.type === 'beacon') {
+                    const pulse = 0.5 + 0.5 * Math.sin(elapsed * 3.2 + item.phase);
+                    item.mesh.scale.setScalar(0.82 + pulse * 0.42);
+                } else if (item.type === 'flag') {
+                    item.mesh.rotation.y = item.base + Math.sin(elapsed * 1.7 + item.phase) * 0.16;
+                    item.mesh.rotation.z = Math.sin(elapsed * 2.1 + item.phase) * 0.055;
+                }
+            });
 
             // 4. Decay Explosion Flash & Camera Shake
             if (this.explosionLight.intensity > 0.01) {
